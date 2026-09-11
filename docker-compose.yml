@@ -1,0 +1,46 @@
+# Local service: the API container plus Postgres, the same shape as ECS + RDS.
+#
+#   docker compose up -d --build
+#   docker compose logs -f api        # verification codes appear here in dev
+#
+# Secrets come from .env (scripts/dev_env.py writes it). Both ports stay on
+# loopback: this service holds PII and has no business on the LAN.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: auditor
+      POSTGRES_DB: auditor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/dev_env.py to create .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auditor -d auditor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Overrides the SQLite URL in .env for the containerized service.
+      EA_DATABASE_URL: postgresql+asyncpg://auditor:${POSTGRES_PASSWORD}@db:5432/auditor
+      # PayPal donate link for the header button; empty hides it.
+      EA_DONATE_URL: ${EA_DONATE_URL:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

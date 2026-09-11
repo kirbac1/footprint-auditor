@@ -1,0 +1,130 @@
+# Data-broker / people-search registry.
+#
+# Every entry has last_verified: null. Opt-out URLs and procedures change
+# often and none of these have been re-checked against the live sites for
+# this release. Run `uv run python scripts/check_brokers.py` to see which
+# URLs still resolve, then confirm the procedure by hand and set
+# last_verified to the date you did. The API surfaces last_verified with
+# every remediation item so users can see how fresh the route is.
+
+brokers:
+  - id: spokeo
+    name: Spokeo
+    domains: [spokeo.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.spokeo.com/optout
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: Opt-out takes the profile URL and an email address for confirmation.
+    last_verified: null
+
+  - id: whitepages
+    name: Whitepages
+    domains: [whitepages.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.whitepages.com/suppression-requests
+    requires_id_verification: true
+    legal_bases: [ccpa]
+    notes: Suppression flow has asked for a phone call verification in the past.
+    last_verified: null
+
+  - id: beenverified
+    name: BeenVerified
+    domains: [beenverified.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.beenverified.com/app/optout/search
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: peopleconnect
+    name: PeopleConnect (Intelius, TruthFinder, Instant Checkmate, US Search)
+    domains: [intelius.com, truthfinder.com, instantcheckmate.com, ussearch.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://suppression.peopleconnect.us/login
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: One suppression request covers the PeopleConnect family of sites.
+    last_verified: null
+
+  - id: radaris
+    name: Radaris
+    domains: [radaris.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://radaris.com/control/privacy
+    requires_id_verification: true
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: fastpeoplesearch
+    name: FastPeopleSearch
+    domains: [fastpeoplesearch.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.fastpeoplesearch.com/removal
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: truepeoplesearch
+    name: TruePeopleSearch
+    domains: [truepeoplesearch.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.truepeoplesearch.com/removal
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: mylife
+    name: MyLife
+    domains: [mylife.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.mylife.com/ccpa/index.pubview
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: peoplefinders
+    name: PeopleFinders
+    domains: [peoplefinders.com]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://www.peoplefinders.com/opt-out
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: ""
+    last_verified: null
+
+  - id: acxiom
+    name: Acxiom
+    domains: [acxiom.com]
+    jurisdictions: [US, EU]
+    method: web_form
+    opt_out_url: https://isapps.acxiom.com/optout/optout.aspx
+    requires_id_verification: false
+    legal_bases: [ccpa, gdpr]
+    notes: Marketing-data broker; has no public profile pages, so discovery will rarely surface it. Listed for completeness of the opt-out sweep.
+    last_verified: null
+
+  - id: fonecta
+    name: Fonecta (Finder.fi)
+    domains: [finder.fi, fonecta.fi]
+    jurisdictions: [FI, EU]
+    method: letter
+    opt_out_url: null
+    requires_id_verification: false
+    legal_bases: [gdpr]
+    notes: Finnish directory service. Look up the current privacy contact on their site and send the GDPR erasure/objection letter.
+    last_verified: null

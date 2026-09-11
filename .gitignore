@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# Secrets and local data: the dev DB holds encrypted PII, .env holds the keys to it.
+.env
+*.db
+*.db-journal
+
+web/node_modules/
+web/dist/
+
+# Local agent / editor config
+.claude/
