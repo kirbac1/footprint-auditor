@@ -1,0 +1,81 @@
+name: deploy-demo
+
+# Deploys the public demo to Cloud Run, and only after ci has passed on main:
+# a red build should never reach the thing people click on.
+#
+# Setup once: deploy/cloudrun/setup-github-oidc.sh. It creates a service
+# account and a workload identity pool, so no Google key ever lives in a
+# repository secret.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC for Google, in place of a long-lived service-account key
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # A manual run deploys what is on main; an automatic one only follows a
+    # green ci.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: demo
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: footprint-auditor
+          source: .
+          region: ${{ vars.GCP_REGION || 'europe-north1' }}
+          flags: --allow-unauthenticated --memory=1Gi --cpu=1 --min-instances=0 --max-instances=1
+          # Demo mode is not a default to be forgotten: a deployment that
+          # dropped it would show strangers real findings about themselves
+          # from a database in /tmp.
+          env_vars: |
+            EA_ENV=dev
+            EA_DEMO_SCANS=true
+            EA_VERIFICATION_DELIVERY=console
+            EA_DATABASE_URL=sqlite+aiosqlite:////tmp/footprint.db
+            EA_SCANS_PER_DAY=20
+          secrets: |
+            EA_JWT_SECRET=EA_JWT_SECRET:latest
+            EA_FIELD_ENCRYPTION_KEY=EA_FIELD_ENCRYPTION_KEY:latest
+            EA_BLIND_INDEX_KEY=EA_BLIND_INDEX_KEY:latest
+
+      - name: Check the deployment answers
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          echo "deployed to $url"
+          # Cold start plus migrations: give it a moment before judging it.
+          for _ in $(seq 1 20); do
+            if curl -fsS --max-time 10 "$url/meta" -o meta.json; then break; fi
+            sleep 5
+          done
+          cat meta.json
+          python3 - <<'PY'
+          import json, sys
+          meta = json.load(open("meta.json"))
+          if not meta["demo_scans"]:
+              sys.exit("refusing to call this a demo: EA_DEMO_SCANS is off")
+          if not meta["scans_available"]:
+              sys.exit("deployed, but scans are unavailable")
+          print("demo is live, with the scripted model and synthetic results")
+          PY

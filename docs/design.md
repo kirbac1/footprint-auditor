@@ -253,7 +253,9 @@ required; nothing is charged inside the allowances, and a budget alert is
 still worth setting. [`deploy/cloudrun/`](../deploy/cloudrun/) has the script
 and the trade-offs: cold starts, one instance, and a SQLite file in the
 instance's `/tmp` that disappears with it — which is the point for a demo,
-since no visitor's account outlives the day.
+since no visitor's account outlives the day. It also has a one-time script that
+wires GitHub Actions to deploy through workload identity federation, so the
+demo follows `main` without a Google key living in a repository secret.
 
 [`deploy/huggingface/`](../deploy/huggingface/) does the same for a Hugging
 Face Space, and is kept for anyone who has PRO: as of September 2026 their

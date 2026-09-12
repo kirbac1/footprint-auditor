@@ -10,7 +10,23 @@ everything else, and it scales to zero — an idle demo costs nothing. A billing
 account is required; nothing is charged within the allowances. Set a budget
 alert anyway.
 
-**What the script does.** Enables the APIs, creates the three secrets in Secret
+**Or let GitHub do it.** [`setup-github-oidc.sh`](setup-github-oidc.sh) creates a
+deployer service account and a workload identity pool scoped to one
+repository, then prints the two values to paste into the repository's secrets:
+
+```bash
+./deploy/cloudrun/setup-github-oidc.sh <gcp-project-id> kirbac1/footprint-auditor
+```
+
+After that, `.github/workflows/deploy-demo.yml` deploys on every green `ci`
+run on `main`, and on demand. No Google key is ever stored: GitHub proves who
+it is with a short-lived OIDC token, and only that repository may impersonate
+the deployer. The workflow ends by fetching `/meta` from the new revision and
+failing if demo mode is off or scans are unavailable — a deployment that
+quietly dropped `EA_DEMO_SCANS` would show strangers real findings from a
+database in `/tmp`.
+
+**What the manual script does.** Enables the APIs, creates the three secrets in Secret
 Manager if they are missing, builds the image from this repository with Cloud
 Build, and deploys it in demo mode with at most one instance.
 
