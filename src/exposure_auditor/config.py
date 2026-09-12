@@ -119,6 +119,15 @@ class Settings(BaseSettings):
     # Off closes sign-ups on a public instance without closing the door on
     # the people who already have credentials.
     registration_open: bool = True
+    # A shared invite that registration must present, for an instance opened to
+    # a named audience. Each person still gets an account of their own -- which
+    # a shared login cannot give them -- and finding the URL is not enough.
+    registration_code: SecretStr | None = None
+    # Show verification codes on the page instead of sending them. Demo mode
+    # does this because it has no mailbox; this does it with real search, for an
+    # invited audience only. Verification then proves possession of the invite,
+    # not ownership of the address, so production refuses it.
+    codes_on_page: bool = False
     # Force the scripted model even when a provider is configured. The
     # end-to-end tests need a scan that is instant and identical every run.
     demo_scripted_model: bool = False
@@ -165,6 +174,10 @@ class Settings(BaseSettings):
                 raise ValueError("prod requires a Postgres EA_DATABASE_URL")
             if self.demo_scans:
                 raise ValueError("EA_DEMO_SCANS would show users synthetic findings; not allowed in prod")
+            if self.codes_on_page:
+                raise ValueError(
+                    "EA_CODES_ON_PAGE would let anyone verify an address they don't own; not allowed in prod"
+                )
         if self.verification_delivery == "aws" and not self.ses_sender:
             raise ValueError("EA_SES_SENDER is required when EA_VERIFICATION_DELIVERY=aws")
         return self

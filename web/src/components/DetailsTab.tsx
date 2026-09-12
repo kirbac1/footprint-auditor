@@ -140,7 +140,7 @@ function IdentifierRow({
                   onDemoCode(i.id, sent.demo_code);
                 },
                 // On a demo the new code appears below; "on its way" would be untrue.
-                meta?.demo_scans ? undefined : t("details.codeSent"),
+                meta?.demo_scans || meta?.codes_on_page ? undefined : t("details.codeSent"),
               )
             }
           >
@@ -150,7 +150,8 @@ function IdentifierRow({
             <span className="hint demo-code">{t("details.demoCode", { code: (demoCode ?? i.demo_code)! })}</span>
           ) : (
             meta?.code_delivery === "console" &&
-            !meta?.demo_scans && <span className="hint">{t("details.consoleHint")}</span>
+            !meta?.demo_scans &&
+            !meta?.codes_on_page && <span className="hint">{t("details.consoleHint")}</span>
           )}
         </form>
       )}

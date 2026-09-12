@@ -115,7 +115,8 @@ async function request<T>(method: string, path: string, body?: unknown, form?: B
 export const api = {
   meta: () => request<Meta>("GET", "/meta"),
 
-  register: (email: string, password: string) => request<unknown>("POST", "/auth/register", { email, password }),
+  register: (email: string, password: string, inviteCode?: string) =>
+    request<unknown>("POST", "/auth/register", { email, password, invite_code: inviteCode || undefined }),
   requestPasswordReset: (email: string) => request<unknown>("POST", "/auth/reset/request", { email }),
   confirmPasswordReset: (email: string, code: string, password: string) =>
     request<void>("POST", "/auth/reset/confirm", { email, code, password }),

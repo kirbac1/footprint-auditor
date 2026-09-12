@@ -68,7 +68,8 @@ async def _issue_code(services: Services, row: Identifier) -> str | None:
     row.code_expires_at = utcnow() + CODE_TTL
     row.attempts = 0
     await services.sender.send(row.kind, row.value, code)
-    return code if services.settings.demo_scans else None
+    shown = services.settings.demo_scans or services.settings.codes_on_page
+    return code if shown else None
 
 
 @router.get("", response_model=list[IdentifierOut])

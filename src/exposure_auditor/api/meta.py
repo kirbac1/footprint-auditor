@@ -26,6 +26,8 @@ async def meta(services: Services = Depends(get_services)) -> dict:
             else None
         ),
         "registration_open": s.registration_open,
+        "invite_required": s.registration_code is not None,
+        "codes_on_page": s.codes_on_page,
         "scans_available": services.llm is not None and services.search is not None,
         "reverse_image_available": services.reverse_image is not None,
         "breach_check_available": s.hibp_api_key is not None,

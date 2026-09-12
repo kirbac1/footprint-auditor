@@ -118,6 +118,12 @@ limits the damage; it doesn't prevent it. Proving a name means an eID or a
 document check — a real option in Finland, and the honest fix. Photos are
 harder: nothing short of a liveness check ties a face to an account.
 
+**On the invited recruiter instance, verification proves the invite, not the
+address.** It sends no mail, so `EA_CODES_ON_PAGE` shows each code on the page,
+and anyone holding the invite can verify and scan any email or name. The
+ownership gate is reduced to "was invited". That is a deliberate trade for a
+small, named audience; the setting is off by default and production refuses it.
+
 **The injection heuristic is a phrase list.** `_AIMED_AT_AGENT` catches "ignore
 previous instructions", "note to AI agents" and a handful of relatives. A
 politely-worded injection that avoids those phrases passes it. What saves the

@@ -95,7 +95,33 @@ public, so it gates nothing. This generates a new one, stores it as
 people you choose. The app never publishes a configured password, and running
 the script again rotates it on the next deploy.
 
-## 4. Turn it on
+## 4. Real results for invited recruiters
+
+The Bedrock variant runs the real thing: real Brave search as well as the real
+model. It does not seed a shared demo account. A shared login with real data
+would show every recruiter the others' names, emails and findings, so each
+person registers their own account with an invite code instead.
+
+```bash
+./deploy/cloudrun/set-brave-key.sh      # from .env; one test query before storing
+./deploy/cloudrun/set-invite-code.sh    # prints the code and an invite link, once
+```
+
+Send recruiters the invite link: it fills the code in on the sign-up form.
+
+Two shortcuts keep this free, and both are deliberate:
+
+- **No mail is sent.** Verification codes appear on the page. That means
+  verification proves someone holds the invite, not that they own the address:
+  anyone invited can scan any email or name. Acceptable for a small invited
+  audience; production refuses `EA_CODES_ON_PAGE` outright.
+- **Accounts live in `/tmp`.** They disappear when the instance scales down. A
+  recruiter who comes back tomorrow registers again.
+
+Caps are sized to Brave's free tier of 2,000 queries a month: at most 12
+searches a scan and 5 scans a day across the deployment.
+
+## 5. Turn it on
 
 ```bash
 gh variable set MODEL_PROVIDER --body bedrock

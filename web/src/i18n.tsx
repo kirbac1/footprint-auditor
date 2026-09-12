@@ -38,6 +38,7 @@ const en = {
   "reset.newPassword": "New password",
   "reset.setPassword": "Set new password",
   "reset.backToSignIn": "Back to sign in",
+  "auth.inviteCode": "Invite code",
   "auth.accountExists": "If this email already has an account, sign in with that account's password.",
 
   "tab.details": "Your details",
@@ -73,7 +74,7 @@ const en = {
   "details.verify": "Verify",
   "details.resend": "Send a new code",
   "details.codeSent": "A new code is on its way.",
-  "details.demoCode": "Demo instance, no email is sent. Your code is {code}.",
+  "details.demoCode": "No email is sent on this instance. Your code is {code}.",
   "details.consoleHint": "Local server: the code is printed in the API log.",
   "details.addTitle": "Add a detail",
   "details.kindLabel": "Kind",
@@ -283,6 +284,7 @@ const fi: Record<MessageKey, string> = {
   "reset.newPassword": "Uusi salasana",
   "reset.setPassword": "Aseta uusi salasana",
   "reset.backToSignIn": "Takaisin kirjautumiseen",
+  "auth.inviteCode": "Kutsukoodi",
   "auth.accountExists": "Jos tällä sähköpostilla on jo tili, kirjaudu sen salasanalla.",
 
   "tab.details": "Omat tiedot",
@@ -318,7 +320,7 @@ const fi: Record<MessageKey, string> = {
   "details.verify": "Vahvista",
   "details.resend": "Lähetä uusi koodi",
   "details.codeSent": "Uusi koodi on matkalla.",
-  "details.demoCode": "Demo, s\u00e4hk\u00f6postia ei l\u00e4hetet\u00e4. Koodisi on {code}.",
+  "details.demoCode": "T\u00e4m\u00e4 palvelu ei l\u00e4het\u00e4 s\u00e4hk\u00f6postia. Koodisi on {code}.",
   "details.consoleHint": "Paikallinen palvelin: koodi tulostuu API:n lokiin.",
   "details.addTitle": "Lisää tieto",
   "details.kindLabel": "Tyyppi",

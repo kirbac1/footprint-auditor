@@ -72,15 +72,19 @@ jobs:
           source: .
           region: ${{ vars.GCP_REGION || 'europe-north1' }}
           flags: --allow-unauthenticated --memory=1Gi --cpu=1 --min-instances=0 --max-instances=1
-          # The web stays synthetic; the model is real: gpt-oss-120b on Bedrock,
-          # through its OpenAI-compatible endpoint with a Bedrock API key. That
-          # is the path this account is entitled to -- the Messages API endpoint
-          # reported the Claude models as nonexistent, and the proprietary GPT
-          # models need AWS Sales. It also measured best in the eval: recall
-          # 0.969, no namesake leaks, 25 s at p95, about half a cent a case.
+          # The real thing, for invited recruiters: gpt-oss-120b on Bedrock
+          # (the model this account is entitled to, and the best measured) over
+          # real Brave search. Everyone registers their own account with the
+          # invite code, because a shared login would show each person the
+          # others' real details. No mail is sent, so codes appear on the page;
+          # data lives in /tmp and is gone when the instance scales down.
+          # Caps fit Brave's free tier: at most 12 searches a scan and 5 scans a
+          # day across the deployment keeps a month under 2,000 queries.
           env_vars: |
             EA_ENV=dev
-            EA_DEMO_SCANS=true
+            EA_DEMO_SCANS=false
+            EA_CODES_ON_PAGE=true
+            EA_REGISTRATION_OPEN=true
             EA_VERIFICATION_DELIVERY=console
             EA_DATABASE_URL=sqlite+aiosqlite:////tmp/footprint.db
             EA_LLM_PROVIDER=openai
@@ -89,16 +93,16 @@ jobs:
             EA_PRICE_INPUT_PER_MTOK=${{ vars.EA_PRICE_INPUT_PER_MTOK || '0.15' }}
             EA_PRICE_OUTPUT_PER_MTOK=${{ vars.EA_PRICE_OUTPUT_PER_MTOK || '0.60' }}
             EA_MAX_SCAN_COST_USD=${{ vars.EA_MAX_SCAN_COST_USD || '0.25' }}
-            EA_SCANS_PER_DAY=${{ vars.EA_SCANS_PER_DAY || '10' }}
-            EA_SCANS_PER_DAY_TOTAL=${{ vars.EA_SCANS_PER_DAY_TOTAL || '100' }}
-            EA_DEMO_ACCOUNT_PUBLISHED=${{ vars.EA_DEMO_ACCOUNT_PUBLISHED || 'false' }}
-            EA_REGISTRATION_OPEN=${{ vars.EA_REGISTRATION_OPEN || 'false' }}
+            EA_AGENT_MAX_SEARCHES=${{ vars.EA_AGENT_MAX_SEARCHES || '12' }}
+            EA_SCANS_PER_DAY=${{ vars.EA_SCANS_PER_DAY || '3' }}
+            EA_SCANS_PER_DAY_TOTAL=${{ vars.EA_SCANS_PER_DAY_TOTAL || '5' }}
           secrets: |
             EA_JWT_SECRET=EA_JWT_SECRET:latest
             EA_FIELD_ENCRYPTION_KEY=EA_FIELD_ENCRYPTION_KEY:latest
             EA_BLIND_INDEX_KEY=EA_BLIND_INDEX_KEY:latest
             EA_OPENAI_API_KEY=EA_OPENAI_API_KEY:latest
-            EA_DEMO_PASSWORD=EA_DEMO_PASSWORD:latest
+            EA_BRAVE_API_KEY=EA_BRAVE_API_KEY:latest
+            EA_REGISTRATION_CODE=EA_REGISTRATION_CODE:latest
 
       - name: Check the deployment answers
         env:
@@ -115,11 +119,19 @@ jobs:
           python3 - <<'PY'
           import json, os, sys
           meta = json.load(open("meta.json"))
-          if not meta["demo_scans"]:
-              sys.exit("refusing to call this a demo: EA_DEMO_SCANS is off")
+          real = os.environ.get("EXPECT_REAL_MODEL") == "true"
           if not meta["scans_available"]:
               sys.exit("deployed, but scans are unavailable")
-          if os.environ.get("EXPECT_REAL_MODEL") == "true" and meta.get("scripted_model"):
-              sys.exit("expected a real model, but the demo fell back to the scripted one")
-          print("demo is live, with the scripted model and synthetic results")
+          if real:
+              if meta.get("scripted_model"):
+                  sys.exit("expected a real model, but the service fell back to the scripted one")
+              if meta["demo_scans"]:
+                  sys.exit("expected real search results, but demo mode is on")
+              if not meta.get("invite_required"):
+                  sys.exit("real search is open to anyone with the URL: EA_REGISTRATION_CODE is missing")
+              print("live: real model, real search, invite-only registration")
+          else:
+              if not meta["demo_scans"]:
+                  sys.exit("refusing to call this a demo: EA_DEMO_SCANS is off")
+              print("demo is live, with the scripted model and synthetic results")
           PY

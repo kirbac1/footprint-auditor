@@ -11,6 +11,7 @@ class _Out(BaseModel):
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=256)
+    invite_code: str | None = Field(default=None, max_length=128)
 
 
 class ResetRequestIn(BaseModel):

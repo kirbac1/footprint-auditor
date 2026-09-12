@@ -35,6 +35,13 @@ async def register(
             status.HTTP_403_FORBIDDEN,
             "This instance is not open for sign-ups. Use the credentials you were given.",
         )
+    invite = services.settings.registration_code
+    if invite is not None and not hmac.compare_digest(
+        (body.invite_code or "").strip(), invite.get_secret_value()
+    ):
+        # One refusal for a missing code and a wrong one: a difference between
+        # them would help someone guess the invite.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A valid invite code is needed to create an account here.")
     # Same response whether or not the address is already registered: being a
     # user of a privacy tool is itself something people may not want revealed.
     email = normalize("email", body.email)

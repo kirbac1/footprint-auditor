@@ -11,6 +11,8 @@ export function AuthView({ meta, onAuthed }: { meta: Meta | null; onAuthed: () =
   const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // An invite link (?invite=...) fills this in, so a recruiter's first click works.
+  const [invite, setInvite] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,7 +42,7 @@ export function AuthView({ meta, onAuthed }: { meta: Meta | null; onAuthed: () =
         }
         return;
       }
-      if (mode === "signup") await api.register(email, password);
+      if (mode === "signup") await api.register(email, password, invite);
       await api.login(email, password);
       onAuthed();
     } catch (err) {
@@ -129,6 +131,12 @@ export function AuthView({ meta, onAuthed }: { meta: Meta | null; onAuthed: () =
           </label>
         )}
         {mode !== "signin" && <p className="hint">{t("auth.passwordHint")}</p>}
+        {mode === "signup" && meta?.invite_required && (
+          <label>
+            {t("auth.inviteCode")}
+            <input required autoComplete="off" value={invite} onChange={(e) => setInvite(e.target.value)} />
+          </label>
+        )}
         {mode === "reset" && !sent && <p className="hint">{t("reset.intro")}</p>}
         {notice && <p className="note">{notice}</p>}
         {error && (
