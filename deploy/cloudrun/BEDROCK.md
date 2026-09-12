@@ -7,9 +7,14 @@ cents rather than the price of one with forty live searches.
 
 ## 1. On AWS (yours to do: I don't create credentials)
 
-**Model access.** Bedrock console → Model access → request **Claude Opus 5**
-in the region you will use. It is per-region and not instant. `eu-central-1`
-keeps inference in the EU; check the model is offered there before settling.
+**Model access.** Nothing to request: AWS retired the model-access page, and
+serverless foundation models enable themselves the first time an account
+invokes them. Two caveats remain. A first-time user of an Anthropic model may
+be asked for use-case details before the first call succeeds, and a model
+served through AWS Marketplace has to be invoked once by someone with
+Marketplace permissions to enable it account-wide. `eu-central-1` keeps
+inference in the EU; confirm the model is offered there, since availability
+still varies by region.
 
 **A user that can do exactly one thing.** IAM → Users → create
 `footprint-bedrock`, no console access, with this inline policy:
