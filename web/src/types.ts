@@ -31,6 +31,7 @@ export interface Identifier {
   proof_platform: string | null;
   proof_code: string | null;
   proof_expires_at: string | null;
+  demo_code?: string | null;
 }
 
 export type ScanKind = "exposure" | "impersonation";

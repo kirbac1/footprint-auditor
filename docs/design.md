@@ -240,9 +240,24 @@ serving other people's traffic through them.
    (an 8B answers faster and worse — the eval will tell you exactly how much
    worse), Brave's free tier, and a cap on sign-ups.
 
-**Option 3 is the one I would ship**, with the source public and this document
-explaining the rest. Before letting strangers scan themselves for real, the
-blockers are not technical: a privacy policy, a retention schedule, data
-processing agreements with every provider, and plausibly a DPIA, because
-profiling identified people is on the Article 35 list. Those are the real cost
-of "online", and no free tier removes them.
+**Option 3 is what this repository ships.** [`deploy/huggingface/`](../deploy/huggingface/)
+has the Space card, the variables to set, and a push script:
+
+```bash
+./deploy/huggingface/push.sh <your-hf-username>/footprint-auditor
+```
+
+A Space builds the same Dockerfile the compose stack uses, on free CPU
+hardware. Demo mode seeds one shared fictional person so a visitor can scan
+without handing over an address; registration stays open for anyone who wants
+to leave one, and because a Space has no mailbox, the verification code is
+returned to the page instead of a log — a demo-only behaviour, with a test
+that it never happens anywhere else. Only `/tmp` is writable and it is wiped on
+restart, which is the right trade here: no visitor's account outlives the day. Before letting strangers scan themselves for real, the blockers are not
+technical: a privacy policy, a retention schedule, data processing agreements
+with every provider, and plausibly a DPIA, because profiling identified people
+is on the Article 35 list. Those are the real cost of "online", and no free
+tier removes them. Collecting email addresses on the demo is already the
+smallest version of that obligation: encryption at rest, erasure on request and
+an audit log are in place, a privacy notice is not, and it should be written
+before the Space is advertised anywhere.

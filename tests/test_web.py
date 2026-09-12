@@ -63,6 +63,15 @@ def test_demo_mode_runs_the_real_pipeline(settings):
             "email", "name", "city", "birth_year"
         }
 
+        # A visitor who registers has no mailbox here, so the demo hands the
+        # code back instead of hiding it in a log.
+        added = client.post(
+            "/identifiers",
+            json={"kind": "email", "value": "visitor@example.com"},
+            headers={"Authorization": f"Bearer {client.post('/auth/token', data={'username': 'me@example.com', 'password': 'correct-horse-battery'}).json()['access_token']}"},
+        ).json()
+        assert added["demo_code"] is not None and len(added["demo_code"]) == 6
+
         scan_id = client.post("/scan", headers=headers).json()["scan_id"]
         scan = client.get(f"/scan/{scan_id}", headers=headers).json()
         assert scan["status"] == "completed"

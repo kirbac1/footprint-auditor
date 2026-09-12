@@ -55,6 +55,9 @@ class IdentifierOut(_Out):
     proof_platform: str | None = None
     proof_code: str | None = None
     proof_expires_at: datetime | None = None
+    # Demo instances only: there is no mailbox to send a code to, so the page
+    # shows it. Never set when EA_DEMO_SCANS is off.
+    demo_code: str | None = None
 
 
 class FindingOut(_Out):

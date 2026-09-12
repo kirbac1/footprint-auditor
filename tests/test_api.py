@@ -62,6 +62,18 @@ def test_register_does_not_reveal_existing_accounts(ctx):
     assert first.json() == second.json()
 
 
+def test_a_verification_code_is_never_returned_outside_demo_mode(ctx):
+    """The demo shows the code because it has nowhere to send it. Anywhere
+    else, returning it would hand an address to whoever asked about it."""
+    headers = login(ctx.client)
+
+    added = ctx.client.post("/identifiers", json={"kind": "email", "value": "me@example.com"}, headers=headers)
+
+    assert added.json()["demo_code"] is None
+    resent = ctx.client.post(f"/identifiers/{added.json()['id']}/resend", headers=headers)
+    assert resent.json()["demo_code"] is None
+
+
 def test_email_verification(ctx):
     headers = login(ctx.client)
     r = ctx.client.post("/identifiers", json={"kind": "email", "value": "Me@Example.com"}, headers=headers)

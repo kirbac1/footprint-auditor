@@ -22,7 +22,9 @@ RUN uv sync --frozen --no-dev
 COPY --from=web /web/dist /app/web/dist
 ENV EA_WEB_DIST=/app/web/dist
 
-RUN useradd --system --no-create-home app
+# uid 1000: Hugging Face Spaces runs containers as that user, and the
+# home directory has to exist for it to write anything.
+RUN useradd --create-home --uid 1000 app
 USER app
 
 EXPOSE 8000

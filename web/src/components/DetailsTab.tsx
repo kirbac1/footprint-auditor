@@ -111,7 +111,12 @@ function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifi
           >
             {t("details.resend")}
           </button>
-          {meta?.code_delivery === "console" && <span className="hint">{t("details.consoleHint")}</span>}
+          {i.demo_code ? (
+            <span className="hint demo-code">{t("details.demoCode", { code: i.demo_code })}</span>
+          ) : (
+            meta?.code_delivery === "console" &&
+            !meta?.demo_scans && <span className="hint">{t("details.consoleHint")}</span>
+          )}
         </form>
       )}
       {i.kind === "username" && i.status !== "verified" && (

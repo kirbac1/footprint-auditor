@@ -60,12 +60,15 @@ async def _check_new(session: AsyncSession, services: Services, user: User, kind
             )
 
 
-async def _issue_code(services: Services, row: Identifier) -> None:
+async def _issue_code(services: Services, row: Identifier) -> str | None:
+    """Returns the code only on a demo instance, where nothing is delivered
+    anywhere a visitor could read it."""
     code = f"{secrets.randbelow(10**6):06d}"
     row.code_hash = _code_hash(services, row.id, code)
     row.code_expires_at = utcnow() + CODE_TTL
     row.attempts = 0
     await services.sender.send(row.kind, row.value, code)
+    return code if services.settings.demo_scans else None
 
 
 @router.get("", response_model=list[IdentifierOut])
@@ -105,12 +108,13 @@ async def add_identifier(
         value_index=index,
         status="attested" if body.kind in ATTESTED_KINDS else "pending",
     )
-    if row.status == "pending":
-        await _issue_code(services, row)
+    demo_code = await _issue_code(services, row) if row.status == "pending" else None
     session.add(row)
     audit.record(session, user.id, f"identifier_{row.status}", "identifier", row.id)
     await session.commit()
-    return row
+    out = IdentifierOut.model_validate(row)
+    out.demo_code = demo_code
+    return out
 
 
 @router.post("/image", response_model=IdentifierOut, status_code=status.HTTP_201_CREATED)
@@ -193,9 +197,9 @@ async def resend_code(
     retry = await services.limiter.hit(f"resend:{row.id}", 3, 3600)
     if retry is not None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many codes sent; try again later")
-    await _issue_code(services, row)
+    demo_code = await _issue_code(services, row)
     await session.commit()
-    return {"status": "sent"}
+    return {"status": "sent", "demo_code": demo_code}
 
 
 @router.post("/{identifier_id}/proof", response_model=IdentifierOut)
