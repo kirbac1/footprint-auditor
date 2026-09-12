@@ -440,7 +440,14 @@ class ScanAgent:
         if result.url in self._findings:
             return "Already recorded.", "duplicate"
 
-        match_status = "likely" if strong or kinds & CONTEXT_KINDS else "unclear"
+        # Only an email, phone, username or photo settles it. A name plus a
+        # city looks like proof and is not: two people can share both, and a
+        # snippet is 160 characters in which a city may belong to someone else
+        # entirely. That reading made a politician abroad and a restaurateur
+        # in the right city into confident matches. Name-based hits are now a
+        # hypothesis the account holder confirms -- which is also how their own
+        # old website reaches the plan, with them saying so.
+        match_status = "likely" if strong else "unclear"
         # A page that talks to AI agents is trying to steer this one. Whatever
         # it seems to show, it doesn't go straight into the plan.
         suspicious = addresses_the_agent(text)

@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     # Local UI work without a model or search key: scans run the real agent
     # loop against a scripted model and synthetic results (see demo.py).
     demo_scans: bool = False
+    # Whether the sign-in page publishes the demo account. Off for an instance
+    # shown to a named audience: the credentials are handed out with the link,
+    # and the model budget is then spent only by people who were given it.
+    demo_account_published: bool = True
+    # Off closes sign-ups on a public instance without closing the door on
+    # the people who already have credentials.
+    registration_open: bool = True
     # Force the scripted model even when a provider is configured. The
     # end-to-end tests need a scan that is instant and identical every run.
     demo_scripted_model: bool = False

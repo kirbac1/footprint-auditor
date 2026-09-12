@@ -50,7 +50,7 @@ the weakest link — see [what isn't guarded](#what-isnt-guarded).
 | Every claimed identifier must be visible in the URL, title or snippet the model was given | [orchestrator.py:372](../src/exposure_auditor/agent/orchestrator.py#L372) | `test_claimed_corroboration_must_be_visible` |
 | A finding must rest on an identity (email, phone, username, photo, name) — a city identifies nobody | [orchestrator.py:359](../src/exposure_auditor/agent/orchestrator.py#L359) | `test_context_alone_does_not_identify_anyone` |
 | A contradicting context detail with no strong identifier = namesake: counted, never stored | [orchestrator.py:383](../src/exposure_auditor/agent/orchestrator.py#L383) | `test_namesakes_are_counted_not_stored`; metric `namesake_leaks: 0`; cases 02, 03 |
-| A name-only match is `unclear` and waits for the account holder's verdict | [orchestrator.py:393](../src/exposure_auditor/agent/orchestrator.py#L393) | `test_name_only_results_wait_for_review`, `test_confirm_moves_a_name_only_result_into_the_plan` |
+| Only a strong identifier (email, phone, username, photo) makes a finding confident; a name, even with a matching city, waits for the account holder's verdict | [orchestrator.py:443](../src/exposure_auditor/agent/orchestrator.py#L443) | `test_name_only_results_wait_for_review`, `test_confirm_moves_a_name_only_result_into_the_plan`, eval cases 08 and 09 |
 | Usernames and emails match on word boundaries — `plaine` is not `plaine88` | [matching.py:50](../src/exposure_auditor/agent/matching.py#L50) | `test_usernames_match_exactly_not_loosely`, `test_emails_match_whole_addresses_only`; case 07 |
 | Names match across accents and URL slugs — `Meikäläinen` = `maija-meikalainen` | [matching.py:38](../src/exposure_auditor/agent/matching.py#L38) | `test_names_match_across_accents_and_url_slugs` |
 | Phones match on the last 9 digits, so national and international formats agree | [matching.py:74](../src/exposure_auditor/agent/matching.py#L74) | `test_phone_matches_national_format`; case 04 |
@@ -124,6 +124,16 @@ politely-worded injection that avoids those phrases passes it. What saves the
 scan is defence in depth, not this regex: a claimed identifier still has to be
 visible in the text, and a name-only match is still `unclear`. The regex only
 has to catch what would otherwise be promoted to `likely`.
+
+**The fixtures were too clean, and it hid a real failure.** Every namesake in
+the first seven cases contradicts the account holder -- another city, an
+impossible age -- so a name plus a matching city looked like proof, and the
+suite reported precision 1.0. On the real web the namesakes shared the city,
+and "Tampere" appearing anywhere in a 160-character snippet counted as
+corroboration: a politician in Gaziantep and a restaurateur in the right city
+both came back as confident matches. Cases 08 and 09 encode exactly that, and
+they failed the gate (`namesake_leaks: 3`, `likely_precision: 0.769`) until
+the rule changed to require a strong identifier.
 
 **One injection case is an anecdote, not coverage.** Case 05 is a single shape
 of attack. Variants worth adding: injection in the title rather than the

@@ -59,15 +59,21 @@ test("sign up, verify, scan, sort out a namesake and act on the plan", async ({ 
   await context.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Helsinki", { exact: true })).toBeVisible();
 
-  // The demo scan: the Oulu namesake is left out, name-only pages wait for review.
+  // The demo scan: the Oulu namesake is left out, and what is left is a
+  // hypothesis until the person settles it -- a name and a city are not proof.
   await page.getByRole("tab", { name: "Footprint scan" }).click();
   await page.getByRole("button", { name: "Scan my footprint" }).click();
   await expect(page.getByText(/Left out 1 result/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Might be someone with your name" })).toBeVisible();
 
+  // "Not me" removes one for good; "This is me" moves the other into the plan.
   const whitepages = page.locator(".findings.review .finding", { hasText: "whitepages" });
   await whitepages.getByRole("button", { name: "Not me" }).click();
   await expect(whitepages).toHaveCount(0);
+
+  const spokeo = page.locator(".findings.review .finding", { hasText: "spokeo" });
+  await spokeo.getByRole("button", { name: "This is me" }).click();
+  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
 
   await page.getByRole("button", { name: "See what to do about these" }).click();
   await expect(page.getByText("Opt out of Spokeo")).toBeVisible();
@@ -97,8 +103,8 @@ test("an earlier scan opens in the panel when you ask to see it", async ({ page 
   await details.getByLabel(/This name is mine/).check();
   await details.getByRole("button", { name: "Add", exact: true }).click();
 
-  // With a city in scope the demo pages resolve to "About you"; without one
-  // every name-only page waits for review instead.
+  // A city does not make a match confident, but it does keep the Oulu
+  // namesake out, which is what leaves a clean list to click through.
   const context = page.locator("form", { hasText: "Tell yourself apart" });
   await context.getByLabel("Detail value").fill("Helsinki");
   await context.getByRole("button", { name: "Add", exact: true }).click();
@@ -107,7 +113,7 @@ test("an earlier scan opens in the panel when you ask to see it", async ({ page 
   // Two scans, so the earlier-scans list appears at all.
   await page.getByRole("tab", { name: "Footprint scan" }).click();
   await page.getByRole("button", { name: "Scan my footprint" }).click();
-  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Might be someone with your name" })).toBeVisible();
   await page.getByRole("button", { name: "Scan my footprint" }).click();
   await expect(page.getByRole("heading", { name: "Earlier scans" })).toBeVisible();
 

@@ -244,7 +244,11 @@ def test_password_range_accepts_only_a_prefix(ctx):
 
 def test_remediation_plan(ctx):
     headers = login(ctx.client)
-    _run_scan_with_spokeo_hit(ctx, headers)
+    scan_id, _ = _run_scan_with_spokeo_hit(ctx, headers)
+    # A name and a city no longer settle it; the plan acts once the account
+    # holder has said the listing is theirs.
+    listing = ctx.client.get(f"/scan/{scan_id}", headers=headers).json()["findings"][0]
+    assert ctx.client.post(f"/findings/{listing['id']}/confirm", headers=headers).status_code == 200
     ctx.hibp.breaches["me@example.com"] = [{
         "Name": "ExampleForum", "Title": "Example Forum", "Domain": "forum.example",
         "BreachDate": "2021-03-01", "DataClasses": ["Email addresses", "Passwords"],

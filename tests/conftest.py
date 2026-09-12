@@ -143,3 +143,4 @@ def add_name(ctx, headers, name="Maija Meikäläinen"):
 
 def dump(obj) -> str:
     return json.dumps(obj, default=str)
+

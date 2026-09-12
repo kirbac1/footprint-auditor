@@ -106,7 +106,9 @@ async def test_namesakes_are_counted_not_stored():
     )
     out = await agent.run()
     assert [f.url for f in out.findings] == [HELSINKI.url]
-    assert out.findings[0].match_status == "likely"
+    # A name and a matching city is a hypothesis, not proof: two people can
+    # share both, so it waits for the account holder to confirm it.
+    assert out.findings[0].match_status == "unclear"
     assert out.namesakes_excluded == 1
     b = _results_of(llm, 2)["b"]
     assert "namesake" in b["content"] and "is_error" not in b
@@ -217,12 +219,21 @@ def test_scan_reports_namesakes_and_plan_skips_unclear(ctx):
     ], [HELSINKI, OULU, NAME_ONLY])
     assert scan["namesakes_excluded"] == 1
     assert {f["url"]: f["match_status"] for f in scan["findings"]} == {
-        HELSINKI.url: "likely", NAME_ONLY.url: "unclear",
+        HELSINKI.url: "unclear", NAME_ONLY.url: "unclear",
     }
+    # Nothing carries an email, phone or username, so nothing is confident yet
+    # and the plan asks rather than acts.
+    titles = _plan_titles(ctx, headers)
+    assert "Opt out of Spokeo" not in titles
+    assert any(t.startswith("Check 2 results that may be about someone") for t in titles)
+
+    # The account holder settles the broker listing; now the plan acts on it,
+    # and still leaves the page they have not judged alone.
+    helsinki = next(f for f in scan["findings"] if f["url"] == HELSINKI.url)
+    assert ctx.client.post(f"/findings/{helsinki['id']}/confirm", headers=headers).status_code == 200
     titles = _plan_titles(ctx, headers)
     assert "Opt out of Spokeo" in titles
     assert not any("pastebin" in t for t in titles)
-    assert any(t.startswith("Check 1 result that may be about someone") for t in titles)
 
 
 def test_not_me_deletes_the_finding_and_future_scans_skip_it(ctx):

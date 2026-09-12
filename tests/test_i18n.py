@@ -22,6 +22,12 @@ def _scan_with(ctx, headers, name_id, city_id, results, language="en"):
     ]
     r = ctx.client.post(f"/scan?language={language}", headers=headers)
     assert r.status_code == 202, r.text
+    # Name and city alone are a hypothesis now; the letters these tests are
+    # about exist once the account holder has confirmed the listing is theirs.
+    scan = ctx.client.get(f"/scan/{r.json()['scan_id']}", headers=headers).json()
+    for finding in scan["findings"]:
+        ctx.client.post(f"/findings/{finding['id']}/confirm", headers=headers)
+    return scan
 
 
 def _setup(ctx):

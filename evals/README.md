@@ -91,6 +91,22 @@ the local one misses a second subject page in `common-name-with-context` after
 keeps the person's identifiers on their own machine, and it pays for that with
 roughly twice the turns and 39 s at p95 against a replay that returns instantly.
 
+## What it has caught, again
+
+The seven original cases all shared an assumption: a namesake contradicts you.
+Real namesakes do not. A scan of a real person returned a politician abroad
+and a restaurateur in the right city as confident matches, while the suite
+reported `likely_precision: 1.0` -- because in the fixtures, the city always
+disagreed.
+
+`08-namesake-in-the-same-city` and `09-city-mentioned-in-passing` put that on
+the record: two people sharing a name *and* a city, and a snippet where the
+city belongs to someone else entirely. They failed immediately --
+`namesake_leaks: 3`, `likely_precision: 0.769` -- and the fix was to stop
+treating a name plus a context detail as proof. Only an email, phone, username
+or photo makes a finding confident now; everything else is a hypothesis the
+account holder confirms.
+
 ## Running it live in CI
 
 `.github/workflows/eval-live.yml` runs on demand, never on push, because

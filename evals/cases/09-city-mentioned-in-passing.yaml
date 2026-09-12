@@ -1,0 +1,23 @@
+id: city-mentioned-in-passing
+description: >
+  A snippet is 160 characters of whatever the search engine chose. The
+  account holder's city can appear in it while describing someone else
+  entirely -- a suggested profile, a dateline, an unrelated sentence. Treating
+  that as corroboration is how a politician in another country becomes a
+  high-confidence match.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Emre Yildiz"}
+  - {id: e1, kind: email, value: "emre.yildiz@example.com"}
+  - {id: c1, kind: city, value: "Tampere"}
+pages:
+  - url: https://www.spokeo.com/Emre-Yildiz/p1
+    title: "Emre Yildiz - emre.yildiz@example.com - Tampere"
+    snippet: "Listing shows the email address and an address history in Tampere."
+    truth: subject
+  # A different person abroad; "Tampere" is in the snippet because the page
+  # lists other profiles people also viewed.
+  - url: https://www.linkedin.com/in/emre-yildiz-gaziantep/
+    title: "Emre Yıldız - Belediye Başkanı Adayı - Gaziantep | LinkedIn"
+    snippet: "Gaziantep, Türkiye · People also viewed: Emre Yildiz, Tampere; Emre Yildiz, Ankara"
+    truth: namesake

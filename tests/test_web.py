@@ -79,8 +79,11 @@ def test_demo_mode_runs_the_real_pipeline(settings):
         assert scan["namesakes_excluded"] == 1  # the Oulu listing
         assert {f["category"] for f in scan["findings"]} == {"people_search", "paste_or_leak"}
         assert all(f["title"].startswith("[DEMO]") for f in scan["findings"])
+        # Name and city, no email or phone on the page: a hypothesis for the
+        # account holder to settle, not something the plan acts on by itself.
         spokeo = [f for f in scan["findings"] if f["broker_id"] == "spokeo"]
-        assert [f["match_status"] for f in spokeo] == ["likely"]
+        assert [f["match_status"] for f in spokeo] == ["unclear"]
+        client.post(f"/findings/{spokeo[0]['id']}/confirm", headers=headers)
 
         imp_id = client.post("/impersonation-check", headers=headers).json()["scan_id"]
         imp = client.get(f"/scan/{imp_id}", headers=headers).json()

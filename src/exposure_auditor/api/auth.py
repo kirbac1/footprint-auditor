@@ -29,6 +29,12 @@ async def register(
     services: Services = Depends(get_services),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    if not services.settings.registration_open:
+        # A closed instance still serves everyone who was given credentials.
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "This instance is not open for sign-ups. Use the credentials you were given.",
+        )
     # Same response whether or not the address is already registered: being a
     # user of a privacy tool is itself something people may not want revealed.
     email = normalize("email", body.email)

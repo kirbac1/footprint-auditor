@@ -19,7 +19,12 @@ async def meta(services: Services = Depends(get_services)) -> dict:
         "scripted_model": isinstance(services.llm, demo.DemoLLM),
         # A demo instance publishes its shared account: nobody should type
         # their own details into a server that answers with fiction.
-        "demo_account": {"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD} if s.demo_scans else None,
+        "demo_account": (
+            {"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD}
+            if s.demo_scans and s.demo_account_published
+            else None
+        ),
+        "registration_open": s.registration_open,
         "scans_available": services.llm is not None and services.search is not None,
         "reverse_image_available": services.reverse_image is not None,
         "breach_check_available": s.hibp_api_key is not None,

@@ -1,0 +1,32 @@
+id: namesake-in-the-same-city
+description: >
+  The case the clean fixtures miss. Two people share a name *and* a city, so
+  no context detail contradicts anything: a software engineer and a
+  restaurateur, both in Tampere. Only pages carrying a strong identifier --
+  an email, a phone, a username -- are really the account holder's. A page
+  that shows the name and happens to say Tampere is a hypothesis, not a match,
+  and must wait for the person to confirm it.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Emre Yildiz"}
+  - {id: e1, kind: email, value: "emre.yildiz@example.com"}
+  - {id: c1, kind: city, value: "Tampere"}
+  - {id: w1, kind: workplace, value: "Nokia"}
+pages:
+  - url: https://rocketreach.co/emre-yildiz-email_1234
+    title: "Emre Yildiz Email & Phone Number | Nokia Contact Information"
+    snippet: "emre.yildiz@example.com · Nokia, Tampere · Previously Tampere University"
+    truth: subject
+  - url: https://trepo.tuni.fi/bitstream/handle/123456789/1/Yildiz.pdf
+    title: "Emre Yildiz: Image labeling and classification, Tampere University"
+    snippet: "Master's thesis, Tampere University. Supervisor: prof. example."
+    truth: subject
+  # Another Emre Yildiz, same city, nothing contradicting: a restaurant owner.
+  - url: https://www.aamulehti.fi/moro/art-2000007290185.html
+    title: "Tampereelle avataan uusi turkkilainen ravintola - omistaja Emre Yildiz"
+    snippet: "Ravintoloitsija Emre Yildiz avaa uuden paikan Näsilinnankadulle Tampereella."
+    truth: namesake
+  - url: https://emreyildiz.fi/
+    title: "Emre Yildiz Personal Website"
+    snippet: "Ravintola-alan yrittäjä Tampereella. Yhteystiedot ja aukioloajat."
+    truth: namesake
