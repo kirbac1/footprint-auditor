@@ -42,7 +42,11 @@ test("sign up, verify, scan, sort out a namesake and act on the plan", async ({ 
   // Prove the email with the code the server "sent".
   await page.getByLabel("Value", { exact: true }).fill(email);
   await page.getByRole("button", { name: "Add and send code" }).click();
-  await page.getByLabel(`Verification code for ${email}`).fill(await codeFor(email));
+  // A demo instance has no mailbox, so the code must be on the page -- and it
+  // must be the code the server actually issued, not a stale or invented one.
+  const code = await codeFor(email);
+  await expect(page.getByText(`Your code is ${code}`)).toBeVisible();
+  await page.getByLabel(`Verification code for ${email}`).fill(code);
   await page.getByRole("button", { name: "Verify", exact: true }).click();
   await expect(page.getByText("Verified", { exact: true })).toBeVisible();
 

@@ -138,7 +138,8 @@ export const api = {
     return request<Identifier>("POST", "/identifiers/image", undefined, form);
   },
   verify: (id: string, code: string) => request<Identifier>("POST", `/identifiers/${id}/verify`, { code }),
-  resend: (id: string) => request<unknown>("POST", `/identifiers/${id}/resend`),
+  resend: (id: string) =>
+    request<{ status: string; demo_code?: string | null }>("POST", `/identifiers/${id}/resend`),
   startProof: (id: string, platform: string) =>
     request<Identifier>("POST", `/identifiers/${id}/proof`, { platform }),
   checkProof: (id: string) => request<Identifier>("POST", `/identifiers/${id}/proof/check`),

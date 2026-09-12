@@ -13,6 +13,13 @@ interface Props {
 
 export function DetailsTab({ identifiers, meta, onChange }: Props) {
   const { t } = useI18n();
+  // A demo instance returns the verification code instead of sending it
+  // anywhere. The list is refetched after every change and the refetch has no
+  // codes in it, so they are kept here or they are lost before anyone sees them.
+  const [demoCodes, setDemoCodes] = useState<Record<string, string>>({});
+  const rememberCode = (id: string, code: string | null | undefined) => {
+    if (code) setDemoCodes((codes) => ({ ...codes, [id]: code }));
+  };
   return (
     <div className="stack">
       <section className="card">
@@ -23,12 +30,19 @@ export function DetailsTab({ identifiers, meta, onChange }: Props) {
         ) : (
           <ul className="rows">
             {identifiers.map((i) => (
-              <IdentifierRow key={i.id} identifier={i} meta={meta} onChange={onChange} />
+              <IdentifierRow
+                key={i.id}
+                identifier={i}
+                meta={meta}
+                onChange={onChange}
+                demoCode={demoCodes[i.id]}
+                onDemoCode={rememberCode}
+              />
             ))}
           </ul>
         )}
       </section>
-      <AddIdentifier onChange={onChange} />
+      <AddIdentifier onChange={onChange} onDemoCode={rememberCode} />
       <AddContext onChange={onChange} />
       <AddPhoto meta={meta} onChange={onChange} />
     </div>
@@ -46,7 +60,19 @@ function statusText(t: Translate, i: Identifier, meta: Meta | null): string {
   return t(`status.${i.status}` as MessageKey);
 }
 
-function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifier; meta: Meta | null; onChange: () => Promise<void> }) {
+function IdentifierRow({
+  identifier: i,
+  meta,
+  onChange,
+  demoCode,
+  onDemoCode,
+}: {
+  identifier: Identifier;
+  meta: Meta | null;
+  onChange: () => Promise<void>;
+  demoCode?: string;
+  onDemoCode: (id: string, code: string | null | undefined) => void;
+}) {
   const { t } = useI18n();
   const [code, setCode] = useState("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -107,12 +133,21 @@ function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifi
             type="button"
             className="ghost small"
             disabled={busy}
-            onClick={() => void run(() => api.resend(i.id), t("details.codeSent"))}
+            onClick={() =>
+              void run(
+                async () => {
+                  const sent = await api.resend(i.id);
+                  onDemoCode(i.id, sent.demo_code);
+                },
+                // On a demo the new code appears below; "on its way" would be untrue.
+                meta?.demo_scans ? undefined : t("details.codeSent"),
+              )
+            }
           >
             {t("details.resend")}
           </button>
-          {i.demo_code ? (
-            <span className="hint demo-code">{t("details.demoCode", { code: i.demo_code })}</span>
+          {demoCode ?? i.demo_code ? (
+            <span className="hint demo-code">{t("details.demoCode", { code: (demoCode ?? i.demo_code)! })}</span>
           ) : (
             meta?.code_delivery === "console" &&
             !meta?.demo_scans && <span className="hint">{t("details.consoleHint")}</span>
@@ -211,7 +246,13 @@ function UsernameProof({ identifier: i, meta, onChange }: { identifier: Identifi
   );
 }
 
-function AddIdentifier({ onChange }: { onChange: () => Promise<void> }) {
+function AddIdentifier({
+  onChange,
+  onDemoCode,
+}: {
+  onChange: () => Promise<void>;
+  onDemoCode: (id: string, code: string | null | undefined) => void;
+}) {
   const { t } = useI18n();
   const [kind, setKind] = useState<IdentityKind>("email");
   const [value, setValue] = useState("");
@@ -225,7 +266,8 @@ function AddIdentifier({ onChange }: { onChange: () => Promise<void> }) {
     setBusy(true);
     setError(null);
     try {
-      await api.addIdentifier(kind, value, needsAttest && attest);
+      const added = await api.addIdentifier(kind, value, needsAttest && attest);
+      onDemoCode(added.id, added.demo_code);
       setValue("");
       setAttest(false);
       await onChange();
