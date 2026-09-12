@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="560" viewBox="0 0 680 560" role="img" aria-labelledby="title desc">
   <title id="title">How the personal data exposure auditor fits together, with its tech stack</title>
-  <desc id="desc">A React app in English and Finnish talks to a FastAPI service with JWT auth and an ownership gate. The API queues scans for a separate worker that runs the scan agent, the only AI component: one pluggable model, gpt-oss-120b on Amazon Bedrock through its OpenAI-compatible endpoint (which the live demo runs), Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama. Next to it are the breach check using the Have I Been Pwned API and the rule-based action plan with GDPR and CCPA letters in English and Finnish. They store data in PostgreSQL 17, managed with Alembic and encrypted with Fernet and HMAC blind indexes, and every scan writes a content-free trace of tokens, cost and latency, exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate in AWS through Terraform.</desc>
+  <desc id="desc">A React app in English and Finnish talks to a FastAPI service with JWT auth, optional invite-only registration, password reset and an ownership gate. The API queues scans for a separate worker that runs the scan agent, the only AI component: one pluggable model, gpt-oss-120b on Amazon Bedrock through its OpenAI-compatible endpoint (which the live instance runs), Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama. Next to it are the breach check using the Have I Been Pwned API and the rule-based action plan with GDPR and CCPA letters in English and Finnish. They store data in PostgreSQL 17, or SQLite in temporary storage on the live instance, managed with Alembic and encrypted with Fernet and HMAC blind indexes. Every scan writes a content-free trace of tokens, cost and latency, streamed to the page while the scan runs and exportable over OpenTelemetry. The outside APIs are Amazon Bedrock, Brave Search and Have I Been Pwned, with keys held in Secret Manager. It runs on Docker Compose locally and on Cloud Run for the live instance, deployed by GitHub Actions through OIDC after CI passes, and has Terraform for ECS Fargate on AWS.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 14px; font-weight: 500; text-anchor: middle; }
@@ -35,13 +35,29 @@
   </g>
   <line class="arr" x1="340" y1="92" x2="340" y2="146" marker-end="url(#arrow)"/>
 
+  <g class="gray">
+    <rect x="24" y="20" width="166" height="72" rx="8" stroke-width="1"/>
+    <text class="th" x="107" y="40">Outside APIs</text>
+    <text class="ts" x="107" y="60">Bedrock · Brave · HIBP</text>
+    <text class="tech" x="107" y="78">Secret Manager keys</text>
+  </g>
+  <line class="arr" x1="107" y1="112" x2="107" y2="94" marker-end="url(#arrow)"/>
+
+  <g class="gray">
+    <rect x="490" y="20" width="166" height="72" rx="8" stroke-width="1"/>
+    <text class="th" x="573" y="40">GitHub Actions</text>
+    <text class="ts" x="573" y="60">Deploys green CI</text>
+    <text class="tech" x="573" y="78">OIDC → Cloud Run</text>
+  </g>
+  <line class="arr" x1="573" y1="92" x2="573" y2="110" marker-end="url(#arrow)"/>
+
   <rect class="frame" x="24" y="112" width="632" height="382" rx="16"/>
-  <text class="frame-label" x="40" y="476">Docker Compose locally · ECS Fargate on AWS (Terraform)</text>
+  <text class="frame-label" x="40" y="476">Docker Compose locally · Cloud Run live · ECS Fargate on AWS (Terraform)</text>
 
   <g class="teal">
     <rect x="190" y="148" width="300" height="72" rx="8" stroke-width="1"/>
     <text class="th" x="340" y="168">API and ownership gate</text>
-    <text class="ts" x="340" y="188">Verified email or phone first</text>
+    <text class="ts" x="340" y="188">Invite · verified email or phone</text>
     <text class="tech" x="340" y="206">FastAPI · Python 3.12 · JWT</text>
   </g>
   <path class="arr" d="M340 220 L340 238 L135 238 L135 256" marker-end="url(#arrow)"/>
@@ -51,7 +67,7 @@
   <g class="purple">
     <rect x="44" y="258" width="182" height="86" rx="8" stroke-width="1"/>
     <text class="th" x="135" y="278">Scan agent</text>
-    <text class="ts" x="135" y="298">Runs in the scan worker</text>
+    <text class="ts" x="135" y="298">Scan worker · live trace</text>
     <text class="tech" x="135" y="316">gpt-oss-120b · Opus 5</text>
     <text class="tech" x="135" y="332">Bedrock · Qwen3 local</text>
   </g>
@@ -77,14 +93,14 @@
 
   <g class="gray">
     <rect x="120" y="382" width="260" height="72" rx="8" stroke-width="1"/>
-    <text class="th" x="250" y="402">PostgreSQL 17</text>
+    <text class="th" x="250" y="402">PostgreSQL 17 · SQLite</text>
     <text class="ts" x="250" y="422">Encrypted PII, audit log</text>
     <text class="tech" x="250" y="440">Alembic · Fernet + HMAC</text>
   </g>
   <g class="gray">
     <rect x="400" y="382" width="240" height="72" rx="8" stroke-width="1"/>
     <text class="th" x="520" y="402">Scan traces</text>
-    <text class="ts" x="520" y="422">Tokens, cost, latency</text>
+    <text class="ts" x="520" y="422">Streamed live · tokens, cost</text>
     <text class="tech" x="520" y="440">OpenTelemetry · no content</text>
   </g>
 

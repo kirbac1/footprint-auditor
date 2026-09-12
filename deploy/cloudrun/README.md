@@ -1,53 +1,88 @@
-# Deploying the demo to Cloud Run
+# Deploying to Cloud Run
 
-```bash
-./deploy/cloudrun/deploy.sh <gcp-project-id> [region]
-```
+Two variants share one service name, one container and one workflow:
 
-**Why here.** Cloud Run's free allowances (2M requests, 360k vCPU-seconds and
-180k GiB-seconds a month) are perpetual, it runs the same container as
-everything else, and it scales to zero — an idle demo costs nothing. A billing
-account is required; nothing is charged within the allowances. Set a budget
-alert anyway.
+| | Scripted demo (default) | Real, invite-only (`MODEL_PROVIDER=bedrock`) |
+|---|---|---|
+| Model | scripted | gpt-oss-120b on Amazon Bedrock |
+| Search | synthetic pages | Brave Search API |
+| Accounts | a shared fictional person, open registration | invite code; an account per person |
+| Verification codes | shown on the page | shown on the page |
+| Storage | SQLite in `/tmp` | SQLite in `/tmp` |
+| Cost | nothing | tokens, capped (see [BEDROCK.md](BEDROCK.md)) |
 
-**Or let GitHub do it.** [`setup-github-oidc.sh`](setup-github-oidc.sh) creates a
-deployer service account and a workload identity pool scoped to one
-repository, then prints the two values to paste into the repository's secrets:
+The live instance runs the real variant. [BEDROCK.md](BEDROCK.md) is its setup.
+
+**Why Cloud Run.** Its free allowances (2M requests, 360k vCPU-seconds and 180k
+GiB-seconds a month) are perpetual, it runs the same container as everything
+else, and it scales to zero — an idle instance costs nothing. A billing account
+is required; nothing is charged within the allowances. Set a budget alert
+anyway.
+
+## Deploying from GitHub (what the live instance uses)
+
+[`setup-github-oidc.sh`](setup-github-oidc.sh) runs once. It creates a deployer
+service account, the Artifact Registry repository, the three app secrets
+(`EA_JWT_SECRET`, `EA_FIELD_ENCRYPTION_KEY`, `EA_BLIND_INDEX_KEY`), and a
+workload identity pool scoped to one repository, then prints the two values to
+paste into the repository's secrets:
 
 ```bash
 ./deploy/cloudrun/setup-github-oidc.sh <gcp-project-id> kirbac1/footprint-auditor
 ```
 
-After that, `.github/workflows/deploy-demo.yml` deploys on every green `ci`
-run on `main`, and on demand. No Google key is ever stored: GitHub proves who
-it is with a short-lived OIDC token, and only that repository may impersonate
-the deployer. The workflow ends by fetching `/meta` from the new revision and
-failing if demo mode is off or scans are unavailable — a deployment that
-quietly dropped `EA_DEMO_SCANS` would show strangers real findings from a
-database in `/tmp`.
+After that, [`deploy-demo.yml`](../../.github/workflows/deploy-demo.yml) deploys
+on every green `ci` run on `main`, and on demand. No Google key is ever stored:
+GitHub proves who it is with a short-lived OIDC token, and only that repository
+may impersonate the deployer.
 
-**What the manual script does.** Enables the APIs, creates the three secrets in Secret
-Manager if they are missing, builds the image from this repository with Cloud
-Build, and deploys it in demo mode with at most one instance.
+The workflow ends by reading `/meta` from the new revision and failing when the
+deployment is not what it claims to be:
 
-**The trade-offs, stated.**
+- the scripted demo fails if demo mode is off, since it would then show
+  strangers real findings from a database in `/tmp`;
+- the real variant fails if it reports the scripted model, demo search, or
+  registration without an invite — each what a missing secret would silently
+  produce.
+
+## Deploying by hand (scripted demo only)
+
+```bash
+./deploy/cloudrun/deploy.sh <gcp-project-id> [region]
+```
+
+Enables the APIs, creates the three app secrets if they are missing, builds the
+image with Cloud Build, and deploys the scripted demo with at most one instance.
+
+## Scripts that store secrets
+
+Each reads its value from `.env` or a hidden prompt, never from the command
+line, tests it where it can, and adds a Secret Manager version. The next deploy
+picks it up.
+
+| Script | Secret | Used by |
+|---|---|---|
+| [`set-bedrock-api-key.sh`](set-bedrock-api-key.sh) | `EA_OPENAI_API_KEY` | real variant; one test call to the model first |
+| [`set-brave-key.sh`](set-brave-key.sh) | `EA_BRAVE_API_KEY` | real variant; one test query first |
+| [`set-invite-code.sh`](set-invite-code.sh) | `EA_REGISTRATION_CODE` | real variant; prints the code and invite link once |
+
+## The trade-offs, stated
 
 - **Cold starts.** Scaling to zero means the first request after an idle period
   waits for the container to start and the migrations to run — a few seconds.
 - **The database is temporary.** SQLite lives in the instance's `/tmp`, which
-  is memory, and disappears when the instance does. For a demo that is the
-  point: nobody's account outlives the day. For anything real, attach Cloud SQL
-  and set `EA_DATABASE_URL`.
+  is memory, and disappears when the instance does. Nobody's account outlives
+  the day. For anything lasting, attach a hosted Postgres and set
+  `EA_DATABASE_URL`.
+- **No mail.** Codes are shown on the page (`EA_CODES_ON_PAGE`, implied by demo
+  mode). On the real variant that makes verification prove the invite rather
+  than the address. Production refuses the setting.
 - **One instance.** `--max-instances 1` keeps a single SQLite file coherent. It
   is also what keeps a surge inside the free tier.
 
-**Want the agent to be real?** [BEDROCK.md](BEDROCK.md) puts Claude Opus 5
-behind the demo while keeping the synthetic web: real tool calls and a real
-trace, no real person's data, cents per scan.
-
-**Not a demo any more?** Set `EA_DEMO_SCANS=false`, add `EA_BRAVE_API_KEY` and
-a model provider, point `EA_DATABASE_URL` at Cloud SQL, and switch
-`EA_VERIFICATION_DELIVERY` to something that actually sends mail. Then read
-the last section of [../../docs/design.md](../../docs/design.md): the remaining
-blockers are a privacy notice, a retention schedule and processor agreements,
-not infrastructure.
+**Opening it beyond invited people** needs mail delivery
+(`EA_VERIFICATION_DELIVERY=aws`), durable Postgres, `EA_ENV=prod` and no codes
+on the page — and then the last section of
+[../../docs/design.md](../../docs/design.md): the remaining blockers are a
+privacy notice, a retention schedule and processor agreements, not
+infrastructure.

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="560" viewBox="0 0 680 560" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="580" viewBox="0 0 680 580" role="img" aria-labelledby="title desc">
   <title id="title">What is swappable and what is fixed</title>
-  <desc id="desc">The React app talks to the FastAPI service. Inside it, a fixed core holds the ownership gate, the scope guard, the claim check, the namesake rules and the rule-based plan: this is the part that does not change when anything else does. Around it, five ports each have more than one implementation: the model port speaks to Claude on Bedrock, Foundry or the Anthropic API, or to any OpenAI-compatible endpoint: gpt-oss-120b on Amazon Bedrock, which the live demo runs, or Ollama on the user's own machine; web search speaks to Brave or to a fixture replay used by the evals; reverse image to TinEye or nothing; code delivery to SES and SNS, the console, or a test outbox; storage to PostgreSQL or SQLite. Swapping the model changes one environment variable and no guard.</desc>
+  <desc id="desc">The React app talks to the FastAPI service. Inside it, a fixed core holds the ownership gate, the scope guard, the claim check, the namesake rules and the rule-based plan: this is the part that does not change when anything else does. Around it, five ports each have more than one implementation: the model port speaks to Claude on Bedrock, Foundry or the Anthropic API, or to any OpenAI-compatible endpoint: gpt-oss-120b on Amazon Bedrock, which the live instance runs, or Ollama on the user's own machine; web search speaks to Brave or to a fixture replay used by the evals; reverse image to TinEye or nothing; code delivery to SES and SNS, the console, or a test outbox; storage to PostgreSQL or SQLite, which the live instance keeps in /tmp. Swapping the model changes one environment variable and no guard.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 13px; font-weight: 500; text-anchor: middle; }
@@ -72,7 +72,7 @@
     <text class="th" x="608" y="218">Storage</text>
     <text class="tech" x="608" y="236">SQLAlchemy</text>
     <text class="ts" x="608" y="256">PostgreSQL</text>
-    <text class="ts" x="608" y="274">SQLite in tests</text>
+    <text class="ts" x="608" y="274">SQLite, /tmp</text>
   </g>
 
   <g class="gray">
@@ -82,15 +82,16 @@
     <text class="ts" x="366" y="360">TinEye, or not offered</text>
   </g>
 
-  <rect class="frame" x="24" y="398" width="632" height="86" rx="12"/>
+  <rect class="frame" x="24" y="398" width="632" height="106" rx="12"/>
   <text class="frame-label" x="40" y="418">Swapping the model is one line, and no guard changes</text>
   <text class="tech" x="40" y="444" style="text-anchor:start">EA_LLM_PROVIDER=ollama    # free, local, nothing leaves the machine</text>
-  <text class="tech" x="40" y="464" style="text-anchor:start">EA_LLM_PROVIDER=openai    # gpt-oss-120b on Bedrock (the live demo)</text>
+  <text class="tech" x="40" y="464" style="text-anchor:start">EA_LLM_PROVIDER=openai    # gpt-oss-120b on Bedrock (the live instance)</text>
+  <text class="tech" x="40" y="484" style="text-anchor:start">EA_LLM_PROVIDER=bedrock   # Claude Opus 5 through the Anthropic SDK</text>
 
-  <g class="teal"><rect x="180" y="512" width="12" height="12" rx="2" stroke-width="1"/></g>
-  <text class="legend" x="200" y="518">Fixed core</text>
-  <g class="purple"><rect x="310" y="512" width="12" height="12" rx="2" stroke-width="1"/></g>
-  <text class="legend" x="330" y="518">The only AI</text>
-  <g class="gray"><rect x="440" y="512" width="12" height="12" rx="2" stroke-width="1"/></g>
-  <text class="legend" x="460" y="518">Swappable outside</text>
+  <g class="teal"><rect x="180" y="532" width="12" height="12" rx="2" stroke-width="1"/></g>
+  <text class="legend" x="200" y="538">Fixed core</text>
+  <g class="purple"><rect x="310" y="532" width="12" height="12" rx="2" stroke-width="1"/></g>
+  <text class="legend" x="330" y="538">The only AI</text>
+  <g class="gray"><rect x="440" y="532" width="12" height="12" rx="2" stroke-width="1"/></g>
+  <text class="legend" x="460" y="538">Swappable outside</text>
 </svg>

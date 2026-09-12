@@ -21,7 +21,7 @@ the two kinds of proof matters:
 
 - **unit test** — the guard function rejects bad input.
 - **eval case** — a model in the loop, given pages designed to make it try,
-  cannot route around the guard. Stronger, and rarer: there are seven cases.
+  cannot route around the guard. Stronger, and rarer: there are nine cases.
 
 ---
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="540" viewBox="0 0 680 540" role="img" aria-labelledby="title desc">
   <title id="title">Inside the scan agent</title>
-  <desc id="desc">The model — gpt-oss-120b on Amazon Bedrock, Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama — chooses what to search and judges each page. Its searches pass through ScopeGuard, which only allows queries containing the account holder's own details and rejects OR, pipe and AROUND operators, then go to the Brave Search API, or to a fixture replay during evals, whose results return to the model. Its findings pass through record_finding, which checks each claim against the page text and sends pages with text aimed at AI agents to review. Results are sorted into about you, needs your review, or namesake, which is counted but never saved. The user settles pages in review with This is me or Not me.</desc>
+  <desc id="desc">The model — gpt-oss-120b on Amazon Bedrock, Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama — chooses what to search and judges each page. Its searches pass through ScopeGuard, which only allows queries containing the account holder's own details and rejects OR, pipe and AROUND operators, then go to the Brave Search API, or to a fixture replay during evals, whose results return to the model. Its findings pass through record_finding, which checks each claim against the page text and sends pages with text aimed at AI agents to review. Results are sorted in code: a page showing a strong identifier (email, phone, username or photo) is about you and goes into the plan; a page showing only a name, even with a matching city, or suspicious text needs your review, settled with This is me or Not me; a page whose context contradicts yours is a namesake, counted but never saved.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 14px; font-weight: 500; text-anchor: middle; }
@@ -64,13 +64,13 @@
   <g class="gray">
     <rect x="40" y="400" width="186" height="72" rx="8" stroke-width="1"/>
     <text class="th" x="133" y="418">About you</text>
-    <text class="ts" x="133" y="438">Goes into the plan</text>
-    <text class="tech" x="133" y="456">cited page, stored</text>
+    <text class="ts" x="133" y="438">Strong identifier shown</text>
+    <text class="tech" x="133" y="456">into the plan, stored</text>
   </g>
   <g class="gray">
     <rect x="247" y="400" width="186" height="72" rx="8" stroke-width="1"/>
     <text class="th" x="340" y="418">Needs your review</text>
-    <text class="ts" x="340" y="438">Name only or suspicious</text>
+    <text class="ts" x="340" y="438">Name, even with a city</text>
     <text class="tech" x="340" y="456">This is me · Not me</text>
   </g>
   <g class="gray">

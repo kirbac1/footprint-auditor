@@ -1,7 +1,7 @@
 # Design notes
 
 Why this app is shaped the way it is: which parts are swappable, which are
-fixed on purpose, what the evals measure, and what it would take to run it for
+fixed on purpose, what the evals measure, and what it takes to run it for
 real.
 
 Companion documents: [guardrails.md](guardrails.md) (every rule, where it is
@@ -30,76 +30,86 @@ implementations, one of which is used in tests.
 
 | Port | Interface | Implementations |
 |---|---|---|
-| Model | `.messages.create(...)` | Claude on Bedrock, Foundry or the Anthropic API; any OpenAI-compatible endpoint (Ollama locally, Mistral, OpenAI, Groq); a scripted model for CI |
-| Web search | `SearchProvider` | Brave, paced for its free tier; a fixture replay for evals; a demo provider |
+| Model | `.messages.create(...)` | gpt-oss-120b on Bedrock's OpenAI-compatible endpoint (the live instance); Claude on Bedrock, Foundry or the Anthropic API; any other OpenAI-compatible endpoint (Ollama locally, Mistral, OpenAI, Groq); a scripted model for CI and the demo |
+| Web search | `SearchProvider` | Brave, paced for its free tier; a fixture replay for evals; a synthetic web for the scripted demo |
 | Reverse image | `ReverseImageProvider` | TinEye; none (the tool is then not offered to the agent) |
-| Code delivery | `CodeSender` | AWS SES/SNS; console; an outbox file for tests |
-| Storage | SQLAlchemy | PostgreSQL; SQLite for local work and tests |
+| Code delivery | `CodeSender` | AWS SES/SNS; console, optionally shown on the page; an outbox file for tests |
+| Storage | SQLAlchemy | PostgreSQL; SQLite for local work, tests and the live instance's `/tmp` |
 
 Swapping the model is one environment variable:
 
 ```bash
+EA_LLM_PROVIDER=openai      # + EA_OPENAI_BASE_URL, EA_MODEL_ID: gpt-oss-120b on Bedrock (live), Mistral, Groq, …
 EA_LLM_PROVIDER=ollama      # a model on your laptop, free, nothing leaves it
 EA_LLM_PROVIDER=bedrock     # Claude Opus 5 on AWS
-EA_LLM_PROVIDER=openai      # + EA_OPENAI_BASE_URL, EA_MODEL_ID: Mistral, Groq, …
 ```
 
 **What it costs to swap.** The agent speaks the Anthropic message shape, and
 [`openai_compat.py`](../src/exposure_auditor/openai_compat.py) translates that
 to OpenAI chat-completions and back: tools out, `tool_calls` back as
 `tool_use` blocks, `finish_reason` as `stop_reason`, usage into the fields the
-trace records. Two things do not survive the trip — prompt caching (Anthropic's,
-which changes cost, not behaviour) and adaptive thinking. **No guard changes.**
-That was the design test: if a guard had needed rewriting for a different
-model, it was never really enforcing anything.
+trace records, with retries on transient errors. Two things do not survive the
+trip — prompt caching (Anthropic's, which changes cost, not behaviour) and
+adaptive thinking. **No guard changes.** That was the design test: if a guard
+had needed rewriting for a different model, it was never really enforcing
+anything.
+
+The adapter was written for Ollama. When Bedrock's Claude route turned out to
+be closed to this account, the same adapter served gpt-oss-120b on Bedrock with
+a different base URL and key, and no new code.
 
 ## 3. Why these models
 
-**Claude Opus 5 is the default** because the hard part of this job is judgement
-under ambiguity — is this Maija in Oulu the same person as my Maija in
-Helsinki? — and because it is the only provider here that falls back
-automatically when a request is refused mid-scan.
+**gpt-oss-120b runs the live instance** because it measured best and it was
+available. On the account this was deployed from, Bedrock's Messages API
+endpoint answered "does not exist" for every Claude model id, including
+inference profiles listed as active, and the GPT-5.6 models need an entitlement
+from AWS Sales. gpt-oss-120b, on the OpenAI-compatible endpoint, worked first
+time, scored highest on the eval, and costs $0.15 / $0.60 per million tokens.
+Its weights are open, so the same model could later run on hardware you
+control.
 
-**A local model is the interesting option.** A scan sends your name, email,
-phone and city to whichever model judges the pages. With Ollama that model is
-on your machine, so those details never leave it — the behaviour you would
-want from a tool whose subject is your own exposure. It also costs nothing per
-scan, which matters when a scan is 40 searches and 20 turns.
+**Claude Opus 5 remains the code's default provider** because the hard part of
+this job is judgement under ambiguity — is this Maija in Oulu the same person
+as my Maija in Helsinki? — and because the Anthropic API is the only provider
+here that falls back automatically when a request is refused mid-scan. It has
+not been measured on this eval, for the access reasons above.
 
-**The measured comparison** (same cases, same guards, same machine):
+**A local model is the private option.** A scan sends your name, email, phone
+and city to whichever model judges the pages. With Ollama that model is on your
+machine, so those details never leave it — the behaviour you would want from a
+tool whose subject is your own exposure. It also costs nothing per scan.
 
-| | scripted (CI) | qwen3:4b | qwen3:8b | qwen3:30b-a3b |
-|---|---|---|---|---|
-| recall | 0.923 | **0.0** | 0.154 `[0 .. 0.31]` | 0.846 `[0.77 .. 1.0]` |
-| likely_precision | 1.0 | 1.0\* | 1.0\* | 1.0 |
-| namesake_leaks | 0 | 0 | 0 | 0 |
-| findings_outside_corpus | 0 | 0 | 0 | 0 |
-| claims refused per run | 0 | 24 | **78** | 2–10 |
-| p95 latency | — | 28 s | 472 s | 116 s |
+**The measured comparison** (same guards; the Qwen and scripted runs predate
+cases 08 and 09, the two hardest):
+
+| | scripted (CI) | qwen3:4b | qwen3:8b | qwen3:30b-a3b | gpt-oss-120b |
+|---|---|---|---|---|---|
+| cases × runs | 7 × 1 | 7 × 2 | 7 × 2 | 7, five sessions | **9 × 2** |
+| recall | 0.923 | **0.0** | 0.154 `[0 .. 0.31]` | 0.72 – 1.0 by session | **0.969** `[0.94 .. 1.0]` |
+| likely_precision | 1.0 | 1.0\* | 1.0\* | 1.0 | 1.0 |
+| namesake_leaks | 0 | 0 | 0 | 0 | 0 |
+| findings_outside_corpus | 0 | 0 | 0 | 0 | 0 |
+| claims refused per run | 0 | 24 | **78** | 4 – 10 | 1 |
+| p95 latency | — | 28 s | 472 s | 39 – 216 s | 25 s |
+| cost per case | $0 | $0 | $0 | $0 (local) | ~$0.005 |
 
 \* precision over an empty set: the small models recorded almost nothing.
+gpt-oss's cost is its measured tokens at Bedrock's prices; the report's own
+cost column used the default Claude prices.
 
 **There is a cliff between 8B and 30B**, and the guards are what make it
 visible. A weak model here does not produce plausible-looking nonsense; it
 produces claims the page text does not support, 78 of them in a run, and every
-one is refused. The 8B is also four times slower than the 30B despite being a
-quarter the size, because it is dense: every parameter fires on every token,
-while the 30B is a mixture of experts with about 3B active.
+one is refused. The 8B is also slower than the 30B despite being a quarter the
+size, because it is dense: every parameter fires on every token, while the 30B
+is a mixture of experts with about 3B active. Small models are not a cheaper
+version of this app. They cannot run it.
 
-The practical consequence for hosting: an Ollama-only deployment needs the
-30B, which needs 32 GB and generates at a few tokens a second on CPU. Small
-models are not a cheaper version of this app. They cannot run it.
-
-Read the bottom half. The scripted model follows a script, so it never tests a
-guard. A real model driving the same tools tried an out-of-scope query and made
-claims the page text did not support — and every one was refused, which is why
-the top half looks similar. The invariants held for both, because they are
-enforced in code.
-
-The spread is the other lesson: recall varies by ±0.12 between identical runs,
-so `eval --repeat N` reports the mean with the range, and judges invariants by
-their **worst** run. Two clean runs and one leak is a leaking agent, not a
-third of one.
+**The spread is the other lesson.** One three-run session of the 30B scored
+1.0, 0.54 and 0.62 on identical cases. So `eval --repeat N` reports the mean
+with the range, and judges invariants by their **worst** run. Two clean runs
+and one leak is a leaking agent, not a third of one.
 
 ## 4. The guards, in one line each
 
@@ -108,34 +118,50 @@ Full contract with enforcement points and tests in
 
 - **Ownership.** No scan without a verified email or phone. Usernames need a
   code in a public bio. Names and photos are attested and capped — the honest
-  hole, documented rather than hidden.
+  hole, documented rather than hidden. An instance can also require an invite
+  code to register at all.
 - **Scope.** Every query must name the account holder; `OR`, `|` and
   `AROUND()` are rejected. Enforced in code, because search results are
   attacker-controlled text and a prompt is a request, not a control.
 - **Evidence.** A finding can only point at a URL a tool returned this scan,
   and every claimed identifier must be visible in the text the model was given.
+- **Confidence.** Only a strong identifier — email, phone, username, photo —
+  puts a finding straight into the plan. A name, even with a matching city, is
+  a hypothesis the account holder confirms.
 - **Namesakes.** A contradicting context detail with no strong identifier means
   a stranger: counted, never stored.
 - **Injection.** A page that addresses AI agents can never be a confident
   match, whatever it claims. The eval found that one.
+- **Spend.** A per-scan cost ceiling, a search budget, per-account and
+  deployment-wide daily caps.
 - **Output.** No model output ever reaches a third party. Plans and letters are
   templates; the account holder sends them.
 
 ## 5. What the evals measure
 
-Seven cases, each a made-up person with a small labelled web: their pages,
+Nine cases, each a made-up person with a small labelled web: their pages,
 namesakes' pages, and pages written to mislead. The eval runs the real agent
-and guards against a replay, so a run is free, repeatable and identical across
-models. Scored: recall, precision of "likely" findings, namesake leaks,
-findings outside the corpus, guard interventions, cost and latency.
+and guards against a replay, so a run is free of search quota, repeatable and
+identical across models. Scored: recall, precision of "likely" findings,
+namesake leaks, findings outside the corpus, guard interventions, cost and
+latency.
 
 Three of those gate at zero for every model, scripted or live: errors,
 namesake leaks, findings outside the corpus.
 
-The suite has already earned its place. The first run failed on an injected
-page that repeated the subject's city to corroborate itself; the fix — pages
-addressing AI agents are never "likely" — is now a rule with a test. It also
-showed that a single run cannot distinguish a regression from variance.
+The suite has failed its own gate twice, and both times it was right.
+
+The first run failed on an injected page that repeated the subject's city to
+corroborate itself; the fix — pages addressing AI agents are never "likely" —
+is now a rule with a test.
+
+The second failure came from outside the suite. A real scan returned a
+politician abroad and a restaurateur in the right city as confident matches,
+while the eval reported precision 1.0 — because every fixture namesake
+contradicted the subject. Cases 08 (a namesake in the same city) and 09 (a
+city mentioned in passing) reproduced it, failing with `namesake_leaks: 3`,
+and the strong-identifier rule made them pass. The fixtures had been too clean;
+the lesson is to write a case for each mistake seen on the real web.
 
 ## 6. How this differs from DeleteMe and the rest
 
@@ -159,9 +185,10 @@ as something to opt out of, not a model to copy.
 
 **Where this one is genuinely better:** it shows its evidence (which of your
 details each page actually contained, checked against the page text), it tells
-you what it set aside and why, it works in Finnish with Finnish routes (DVV
-non-disclosure, operator-side Fonecta removal), and it can run entirely on your
-own machine so the data never leaves it.
+you what it set aside and why, it shows its work live while scanning, it works
+in Finnish with Finnish routes (DVV non-disclosure, operator-side Fonecta
+removal), and it can run entirely on your own machine so the data never leaves
+it.
 
 **Where it is behind:** no removal is performed for you, the broker registry is
 12 entries where commercial services track hundreds, and there is no monitoring
@@ -175,116 +202,120 @@ In the order I would do them:
    160-character snippet. Fetching the page would settle most `no_identity`
    refusals and much of the namesake guessing.
 2. **A website identifier.** You cannot currently tell the app which domains
-   are yours, so your own site and a namesake's site are indistinguishable.
-3. **Jurisdiction-aware brokers.** Ten of twelve registry entries are US-only;
+   are yours, so your own site, a namesake's site and a domain you let go years
+   ago are indistinguishable.
+3. **A no-model baseline.** Run the same nine cases with fixed query templates
+   and the code rules alone. If that comes close, the model is overkill for
+   this job, and the numbers should say so rather than the architecture.
+4. **Jurisdiction-aware brokers.** Ten of twelve registry entries are US-only;
    a Finnish user's footprint is on Finnish services. The prompt now orders by
    region, but the registry itself needs Finnish and EU entries.
-4. **Broker freshness.** Every entry but one is `last_verified: null`.
-5. **Monitoring.** A scheduled rescan with a diff is what turns this from an
+5. **Broker freshness.** Every entry but one is `last_verified: null`.
+6. **Monitoring.** A scheduled rescan with a diff is what turns this from an
    audit into a service.
-6. **Identity assurance** for names and photos before opening sign-ups to
+7. **Identity assurance** for names and photos before opening sign-ups to
    strangers — an eID check in Finland.
 
 ## 8. Running it on AWS with Bedrock
 
-[`infra/`](../infra/README.md) is Terraform for the whole thing: VPC, HTTPS-only
-load balancer, ECS Fargate services for the API and the worker, a one-off
-migration task, encrypted RDS PostgreSQL, Secrets Manager, and a GitHub OIDC
-role for the live eval. It validates; it has not been applied.
+[`infra/`](../infra/README.md) is Terraform for a production shape: VPC,
+HTTPS-only load balancer, ECS Fargate services for the API and the worker, a
+one-off migration task, encrypted RDS PostgreSQL, Secrets Manager, and a GitHub
+OIDC role for the live eval. It validates; it has not been applied. The live
+instance runs on Cloud Run instead (section 9) and calls Bedrock from there.
 
-The Bedrock-specific part is short:
+The Bedrock-specific part, as learned against a real account
+([deploy/cloudrun/BEDROCK.md](../deploy/cloudrun/BEDROCK.md) has the detail):
 
-1. **Enable the model.** Bedrock console → Model access → request Claude
-   Opus 5 **in the region you will run in**. Access is per-region and not
-   instant.
-2. **Permissions.** The task role needs `bedrock:InvokeModel` (and the stream
-   variant). Nothing else — the app only invokes a model.
-3. **Point the app at it:** `EA_LLM_PROVIDER=bedrock`, `EA_BEDROCK_REGION`.
-   If invoking `anthropic.claude-opus-5` fails with a validation error naming
-   an inference profile, run `aws bedrock list-inference-profiles` and set
-   `EA_MODEL_ID` to what it returns.
-4. **Set the prices.** `EA_PRICE_INPUT_PER_MTOK` / `EA_PRICE_OUTPUT_PER_MTOK`
-   come from the Bedrock page, not the Anthropic one; the per-scan cost ceiling
-   is computed from them.
-5. **Check before scanning:** `exposure-auditor check` makes one cheap call per
+1. **Model access.** There is no request page any more: serverless models
+   enable themselves on first invocation. A first use of an Anthropic model
+   may ask for use-case details.
+2. **Pick the route.**
+   - *An open-weight model such as gpt-oss-120b* (what runs live):
+     `EA_LLM_PROVIDER=openai`,
+     `EA_OPENAI_BASE_URL=https://bedrock-runtime.<region>.amazonaws.com/openai/v1`,
+     a Bedrock API key in `EA_OPENAI_API_KEY`.
+   - *Claude through the Anthropic SDK*: `EA_LLM_PROVIDER=bedrock`. The default
+     client talks to the Messages API endpoint, which authorizes
+     `bedrock-mantle:CreateInference`, not `bedrock:InvokeModel`. If every model
+     id comes back "does not exist", the account isn't onboarded to that
+     endpoint; `EA_BEDROCK_API=invoke` with an inference profile id uses
+     InvokeModel instead.
+3. **Set the prices.** `EA_PRICE_INPUT_PER_MTOK` / `EA_PRICE_OUTPUT_PER_MTOK`
+   come from the Bedrock page; the per-scan cost ceiling is computed from them.
+4. **Check before scanning:** `exposure-auditor check` makes one cheap call per
    dependency and names what is missing.
 
-Rough idle cost in eu-central-1: NAT gateway ~$35/month, load balancer ~$20,
-db.t4g.micro ~$15, three small Fargate tasks ~$45, plus tokens per scan. The
-NAT gateway is the first thing to revisit.
+Rough idle cost of the Terraform shape in eu-central-1: NAT gateway
+~$35/month, load balancer ~$20, db.t4g.micro ~$15, three small Fargate tasks
+~$45, plus tokens per scan. The NAT gateway is the first thing to revisit.
 
-## 9. Putting it online without paying
+## 9. Putting it online for (almost) nothing
 
-The short answer: **the app can be free to host; the model cannot be free to
-host for other people.** Worth separating.
+The short answer: **the app can be free to host; the model is not free, but a
+good hosted one is cheap enough not to matter at a small scale.**
 
-**What is genuinely free or nearly so**
+**What is genuinely free**
 
-- **The web app and API.** Small always-free tiers exist (Oracle Cloud's ARM
-  instances, fly.io's small machines, Hugging Face Spaces). The app is one
-  container plus Postgres and fits comfortably.
-- **Web search.** Brave's free tier: 1 query/second, 2,000 queries/month. A
-  scan uses up to 40, so roughly 50 scans a month.
+- **The web app and API.** Cloud Run's allowances are perpetual (2M requests,
+  360k vCPU-seconds, 180k GiB-seconds a month), it runs the same container as
+  everything else, and it scales to zero.
+- **Web search.** Brave's free tier: 1 query/second, 2,000 queries/month.
 - **Password breach checks.** The k-anonymity range API is free. Email breach
   lookups need a paid HIBP key.
 - **The model, for you alone.** Ollama on your own machine costs nothing.
 
-**What is not free**
+**What is not**
 
-Running a 30B model for the public means renting a GPU, and nobody gives those
-away: expect roughly $0.20–0.50 an hour, which is $150–350 a month if it stays
-up. Free inference APIs exist (Groq, Google AI Studio and similar have free
-tiers) but their rate limits are built for demos, and the terms usually forbid
-serving other people's traffic through them.
+Hosting a 30B model for other people means renting a GPU: roughly $0.20–0.50
+an hour, $150–350 a month if it stays up. Free inference APIs have rate limits
+built for demos and terms that usually forbid serving other people's traffic.
+Paying per token is the cheaper route by far: gpt-oss-120b on Bedrock measured
+about half a cent per eval case, so a $100 credit covers thousands of scans.
 
-**So the realistic free options are:**
+**The options, in order of how real they are:**
 
-1. **Local-only, which is what you have.** Free, private, no hosting. Perfect
-   for yourself; not a service.
-2. **Public app, bring-your-own-key.** Host the app on a free tier and have
-   each user paste their own API key. No inference cost to you, and it sidesteps
-   the legal exposure of processing other people's personal data at scale.
-3. **Public demo, demo mode only.** `EA_DEMO_SCANS=true` runs the real pipeline
-   against a scripted model and synthetic results. Free, safe, and honest as a
-   portfolio piece — anyone can click through the whole flow without a key,
-   and the app refuses to pretend the findings are real.
-4. **Public and real, for a handful of people.** A cheap VPS with a small model
-   (an 8B answers faster and worse — the eval will tell you exactly how much
-   worse), Brave's free tier, and a cap on sign-ups.
+1. **Local-only.** Free, private, no hosting. Right for yourself; not a service.
+2. **Public app, bring-your-own-key.** Each user pastes their own key. No
+   inference cost to you, and no processing of strangers' data on your bill.
+3. **Public scripted demo.** `EA_DEMO_SCANS=true` runs the real pipeline
+   against a scripted model and synthetic results, with a shared fictional
+   account. Free, and the app refuses to pretend the findings are real.
+4. **Real, for a handful of invited people.** Cloud Run, Brave's free tier,
+   a pay-per-token model, and caps sized to both.
 
-**Option 3 is what this repository ships**, on Cloud Run:
+**This repository ships 3 and 4 from one workflow.**
+[`deploy-demo.yml`](../.github/workflows/deploy-demo.yml) deploys to Cloud Run
+after every green CI run, authenticating through workload identity federation,
+so no Google key lives in a repository secret. By default it deploys the
+scripted demo; the repository variable `MODEL_PROVIDER=bedrock` deploys the
+real variant, which is what the live instance runs:
 
-```bash
-./deploy/cloudrun/deploy.sh <gcp-project-id>
-```
+- gpt-oss-120b on Bedrock and real Brave search;
+- registration needs an invite code, and every person gets an account of their
+  own, because a shared login over real results would show each visitor the
+  previous one's details;
+- no mail is sent, so verification codes appear on the page, and the database
+  is SQLite in the instance's `/tmp`;
+- at most 12 searches and $0.25 a scan, 3 scans per account and 5 a day across
+  the deployment, which keeps a month inside Brave's 2,000 queries.
 
-Cloud Run's free allowances are perpetual (2M requests, 360k vCPU-seconds,
-180k GiB-seconds a month), it runs the same container as everything else, and
-it scales to zero, so an idle demo costs nothing. A billing account is
-required; nothing is charged inside the allowances, and a budget alert is
-still worth setting. [`deploy/cloudrun/`](../deploy/cloudrun/) has the script
-and the trade-offs: cold starts, one instance, and a SQLite file in the
-instance's `/tmp` that disappears with it — which is the point for a demo,
-since no visitor's account outlives the day. It also has a one-time script that
-wires GitHub Actions to deploy through workload identity federation, so the
-demo follows `main` without a Google key living in a repository secret.
+Each variant ends with a check: the workflow reads `/meta` from the new
+revision and fails if the scripted demo reports real search, or if the real one
+reports the scripted model, real search open to anyone, or no invite. A missing
+secret would otherwise produce a quietly wrong deployment.
 
-[`deploy/huggingface/`](../deploy/huggingface/) does the same for a Hugging
-Face Space, and is kept for anyone who has PRO: as of September 2026 their
-free CPU tier no longer appears to cover Docker Spaces, only static ones.
-Check their pricing page before relying on it.
-
-Demo mode seeds one shared fictional person so a visitor can scan without
-handing over an address; registration stays open for anyone who wants to leave
-one, and because neither host has a mailbox, the verification code is returned
-to the page instead of a log — a demo-only behaviour, with a test that it
-never happens anywhere else.
+Codes on the page are the deliberate weak point: verification then proves that
+someone holds the invite, not that they own the address. Fine for a few named
+people; production refuses the setting, with a test.
+[`deploy/huggingface/`](../deploy/huggingface/) does the scripted variant for a
+Hugging Face Space, kept for accounts with PRO: their free tier no longer
+covers Docker Spaces.
 
 Before letting strangers scan themselves for real, the blockers are not
-technical: a privacy policy, a retention schedule, data processing agreements
+technical: a privacy notice, a retention schedule, data processing agreements
 with every provider, and plausibly a DPIA, because profiling identified people
 is on the Article 35 list. Those are the real cost of "online", and no free
-tier removes them. Collecting email addresses on the demo is already the
-smallest version of that obligation: encryption at rest, erasure on request and
-an audit log are in place, a privacy notice is not, and it should be written
-before the Space is advertised anywhere.
+tier removes them. Encryption at rest, erasure on request and an audit log are
+in place; a privacy notice is not, and it should be written before the instance
+is shared beyond people invited by name.

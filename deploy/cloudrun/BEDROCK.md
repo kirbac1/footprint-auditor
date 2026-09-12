@@ -1,9 +1,8 @@
-# Putting a real model behind the demo
+# The real variant: gpt-oss-120b on Bedrock, real search, invited people
 
-The hosted demo replaces the *web*, not the model. With Bedrock credentials it
-runs the real agent — real tool calls, real trace, real token counts — over
-synthetic pages, so no real person's data is ever involved and a scan costs
-cents rather than the price of one with forty live searches.
+This is what the live instance runs: the real agent driven by gpt-oss-120b on
+Amazon Bedrock, searching the real web through Brave, for people you invite.
+Each of them registers an account of their own.
 
 ## What actually works, and why
 
@@ -16,32 +15,93 @@ Three routes were tried against a real account before this one:
 - **GPT-5.6 Luna, Terra and GPT-6 Astra** on the OpenAI-compatible endpoint:
   "not available for this account" — an entitlement that needs AWS Sales.
 - **gpt-oss-120b** on the same endpoint: works, and measured best of every
-  model this project has tried — recall 0.969 over nine cases including the
-  same-city namesake cases, no leaks, 25 s at p95, about half a cent a case at
-  $0.15 / $0.60 per million tokens.
+  model this project has evaluated — recall 0.969 across two runs of all nine
+  cases, including the same-city namesake cases, no leaks, 25 s at p95, about
+  half a cent a case at $0.15 / $0.60 per million tokens.
 
-So the demo runs gpt-oss-120b through Bedrock's OpenAI-compatible endpoint,
-with a Bedrock API key, using the same adapter that serves Ollama locally. No
-new code was needed to add the provider; that is the point of the adapter.
+So the instance runs gpt-oss-120b through Bedrock's OpenAI-compatible
+endpoint, with a Bedrock API key, using the same adapter that serves Ollama
+locally. No new code was needed to add the provider; that is the point of the
+adapter.
 
-## 1. On AWS (yours to do: I don't create credentials)
+Model access needs no request: AWS retired the model-access page, and
+serverless models enable themselves on first invocation. `eu-central-1` keeps
+inference in the EU.
 
-**Model access.** Nothing to request: AWS retired the model-access page, and
-serverless foundation models enable themselves the first time an account
-invokes them. Two caveats remain. A first-time user of an Anthropic model may
-be asked for use-case details before the first call succeeds, and a model
-served through AWS Marketplace has to be invoked once by someone with
-Marketplace permissions to enable it account-wide. `eu-central-1` keeps
-inference in the EU; confirm the model is offered there, since availability
-still varies by region.
+## 1. The model key
 
-**A user that can do exactly one thing.** IAM → Users → create
-`footprint-bedrock`, no console access, with this inline policy. Note the
-service prefix: the SDK talks to the Messages-API endpoint on Bedrock (the
-"Mantle" client), which authorizes on `bedrock-mantle:CreateInference` against
-a *project*, not `bedrock:InvokeModel` against a foundation model. Granting
-only the latter produces a 403 that names the missing action, which is how
-this was found.
+Generate a Bedrock API key (console → Bedrock → API keys) with an expiry, put
+it in `.env` as `EA_OPENAI_API_KEY` for local use, then:
+
+```bash
+./deploy/cloudrun/set-bedrock-api-key.sh
+```
+
+It reads the key from `.env`, or asks with a hidden prompt; makes one real call
+to the model with it, with the header on stdin rather than the command line;
+and stores it in Secret Manager only if that call succeeds.
+
+## 2. The search key and the invite
+
+```bash
+./deploy/cloudrun/set-brave-key.sh      # from .env; one test query before storing
+./deploy/cloudrun/set-invite-code.sh    # prints the code and an invite link, once
+```
+
+Send people the invite link: `?invite=` fills the code in on the sign-up form.
+Without the code, registration answers 403, and a wrong code is
+indistinguishable from a missing one. Run the script again to rotate the code.
+
+There is no shared login. With real search, one account would show every
+visitor the previous one's name, email and findings.
+
+## 3. Turn it on
+
+```bash
+gh variable set MODEL_PROVIDER --body bedrock
+gh workflow run deploy-demo
+```
+
+The deploy fails unless the running service reports a real model, real search
+and invite-only registration — a missing secret would otherwise produce a
+scripted or open instance, silently. To go back to the scripted demo, delete
+the variable.
+
+## What the instance does differently, on purpose
+
+- **No mail is sent.** `EA_CODES_ON_PAGE` shows each verification code on the
+  page. That means verification proves someone holds the invite, not that they
+  own the address: anyone invited can scan any email or name. Acceptable for a
+  small invited audience; production refuses the setting outright.
+- **Accounts live in `/tmp`.** They disappear when the instance scales down. A
+  visitor who comes back tomorrow registers again.
+- **No breach lookups.** There is no HIBP key; password checks still work.
+
+## What it costs, and what stops it
+
+gpt-oss-120b is $0.15 per million input tokens and $0.60 per million output.
+An eval case measured about half a cent. Every limit is settable as a
+repository variable:
+
+| variable | here | what it bounds |
+|---|---|---|
+| `EA_AGENT_MAX_SEARCHES` | 12 | one scan, by live searches |
+| `EA_MAX_SCAN_COST_USD` | 0.25 | one scan, by estimated spend |
+| `EA_SCANS_PER_DAY` | 3 | one account |
+| `EA_SCANS_PER_DAY_TOTAL` | 5 | **the whole deployment**: the wallet and the search quota |
+
+Five scans of twelve searches a day stays under Brave's 2,000 free queries a
+month, and bounds a bad day's model spend at about a dollar even if every scan
+hit its ceiling. Set an AWS budget alert as well: the caps are estimates
+computed from `EA_PRICE_*_PER_MTOK`, and an estimate is not a bill.
+
+## If you want Claude instead
+
+Claude on Bedrock goes through the Anthropic SDK (`EA_LLM_PROVIDER=bedrock`).
+Its default client uses the Messages API endpoint, which authorizes on
+`bedrock-mantle:CreateInference` against a *project*, not `bedrock:InvokeModel`
+against a foundation model; granting only the latter produces a 403 that names
+the missing action. A policy covering both paths:
 
 ```json
 {
@@ -54,7 +114,7 @@ this was found.
       "Resource": "arn:aws:bedrock-mantle:*:<your-account-id>:project/*"
     },
     {
-      "Sid": "LegacyInvokeModelPath",
+      "Sid": "InvokeModelPath",
       "Effect": "Allow",
       "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-5*"
@@ -63,88 +123,8 @@ this was found.
 }
 ```
 
-The second statement is the older InvokeModel path, kept so the key still works
-if the client is ever switched back to it. Neither statement grants anything
-else: no S3, no instances, no billing.
-
-Then create an access key for it. That key can invoke one model family and
-nothing else: it cannot read S3, create instances or see your bill.
-
-## 2. Store the key
-
-Generate a Bedrock API key (console → Bedrock → API keys), put it in `.env` as
-`EA_OPENAI_API_KEY` for local use, then:
-
-```bash
-./deploy/cloudrun/set-bedrock-api-key.sh
-```
-
-It reads the key from `.env`, or asks with a hidden prompt; makes one real call
-to the model with it, with the header on stdin rather than the command line;
-and stores it in Secret Manager only if that call succeeds.
-
-## 3. Make the recruiter login private
-
-```bash
-./deploy/cloudrun/set-demo-password.sh
-```
-
-The demo account's default password is in `demo.py`, and the repository is
-public, so it gates nothing. This generates a new one, stores it as
-`EA_DEMO_PASSWORD`, and prints it once in your terminal for you to send to the
-people you choose. The app never publishes a configured password, and running
-the script again rotates it on the next deploy.
-
-## 4. Real results for invited recruiters
-
-The Bedrock variant runs the real thing: real Brave search as well as the real
-model. It does not seed a shared demo account. A shared login with real data
-would show every recruiter the others' names, emails and findings, so each
-person registers their own account with an invite code instead.
-
-```bash
-./deploy/cloudrun/set-brave-key.sh      # from .env; one test query before storing
-./deploy/cloudrun/set-invite-code.sh    # prints the code and an invite link, once
-```
-
-Send recruiters the invite link: it fills the code in on the sign-up form.
-
-Two shortcuts keep this free, and both are deliberate:
-
-- **No mail is sent.** Verification codes appear on the page. That means
-  verification proves someone holds the invite, not that they own the address:
-  anyone invited can scan any email or name. Acceptable for a small invited
-  audience; production refuses `EA_CODES_ON_PAGE` outright.
-- **Accounts live in `/tmp`.** They disappear when the instance scales down. A
-  recruiter who comes back tomorrow registers again.
-
-Caps are sized to Brave's free tier of 2,000 queries a month: at most 12
-searches a scan and 5 scans a day across the deployment.
-
-## 5. Turn it on
-
-```bash
-gh variable set MODEL_PROVIDER --body bedrock
-gh workflow run deploy-demo
-```
-
-The Bedrock variant closes registration and stops publishing the demo
-credentials, and the deploy fails if the running service reports the scripted
-model — which is what a missing secret would otherwise produce, silently.
-
-## What it costs, and what stops it
-
-gpt-oss-120b is $0.15 per million input tokens and $0.60 per million output.
-A demo scan measured about half a cent; a real scan with forty live searches
-would be a few cents. Three limits apply anyway, each settable as a repository
-variable:
-
-| variable | default here | what it bounds |
-|---|---|---|
-| `EA_MAX_SCAN_COST_USD` | 0.25 | one scan, by estimated spend |
-| `EA_SCANS_PER_DAY` | 10 | one account |
-| `EA_SCANS_PER_DAY_TOTAL` | 100 | **the whole deployment** — the wallet |
-
-At half a cent a scan, the deployment-wide cap bounds a bad day at about fifty
-cents. Set an AWS budget alert as well: the caps are estimates computed from
-`EA_PRICE_*_PER_MTOK`, and an estimate is not a bill.
+If the account isn't onboarded to the Messages API endpoint, set
+`EA_BEDROCK_API=invoke` and an inference profile id in `EA_MODEL_ID`. A
+first-time user of an Anthropic model may be asked for use-case details before
+the first call succeeds. Run `exposure-auditor check` and the eval before
+switching the deployment over.

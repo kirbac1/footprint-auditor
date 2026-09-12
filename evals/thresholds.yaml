@@ -13,7 +13,7 @@ demo:
   recall: {min: 0.9}
   likely_precision: {min: 0.95}
 
-# A real model: bedrock, foundry or anthropic.
+# A real model: bedrock, foundry, anthropic, ollama or openai.
 live:
   recall: {min: 0.8}
   likely_precision: {min: 0.9}

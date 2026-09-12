@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> None:
     password.add_argument("email", help="the account's email address")
 
     evals = sub.add_parser("eval", help="run the agent eval suite (see evals/README.md)")
-    evals.add_argument("--provider", default="demo", help="demo (scripted), or bedrock, foundry, anthropic")
+    evals.add_argument(
+        "--provider", default="demo", help="demo (scripted), or bedrock, foundry, anthropic, ollama, openai"
+    )
     evals.add_argument("--cases", default=None, help="path to the eval cases (default: evals/cases)")
     evals.add_argument("--report", default=None, help="write the JSON report here")
     evals.add_argument("--gate", action="store_true", help="exit non-zero if evals/thresholds.yaml isn't met")
