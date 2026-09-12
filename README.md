@@ -1,9 +1,9 @@
 # Personal Data Exposure Auditor
 
-**[Try it](https://footprint-auditor-ndkmuej5iq-lz.a.run.app)** · the real app,
-with a scripted model and invented search results, so no real page is ever
-found. Sign in as the demo person with one click. First load waits a few
-seconds for a cold start.
+**[Try it](https://footprint-auditor-ndkmuej5iq-lz.a.run.app)** · the real
+agent and guards, driven by gpt-oss-120b on Amazon Bedrock, over invented
+search results, so no real page or person is ever involved. Login details on
+request. First load waits a few seconds for a cold start.
 
 An app that helps a person find where **their own** data is exposed on the
 public internet, and turns that into a prioritized plan to reduce it. One model
@@ -138,11 +138,13 @@ addressed to the agent happened to repeat the person's city, so the claim
 check accepted it as a likely match. Now any page that talks to AI agents
 stays in review. [`evals/README.md`](evals/README.md) has the details.
 
-The same seven cases run against any model. A local `qwen3:30b-a3b` scores the
-same recall and precision as the scripted model while trying an out-of-scope
-query once and making six unsupported claims -- all refused by the guards, none
-of which depend on which model is driving. The table is in
-[`evals/README.md`](evals/README.md).
+The same cases run against any model. `gpt-oss-120b` on Bedrock measured best:
+recall 0.969 over nine cases including the same-city namesakes, no leaks, one
+refused claim a run, 25 s at p95. A local `qwen3:30b-a3b` reaches 0.846; the 4B
+and 8B Qwen models record almost nothing while producing claims the guards
+refuse, 24 and 78 a run. None of the guards depend on which model is driving.
+The tables are in [`evals/README.md`](evals/README.md) and
+[`docs/design.md`](docs/design.md).
 
 [`docs/design.md`](docs/design.md) explains the rest: why these models, what is
 swappable, how it compares to DeleteMe and the people-search sites, what it
@@ -174,7 +176,9 @@ and the ones that are still only structural.
 React (web/) ──► FastAPI ── /auth, /identifiers, /scan, /findings, /breach-check, /remediation-plan
                     │
                     ├─ queues scans ──► worker (exposure-auditor worker)
-                    │                     └─ ScanAgent: Claude via llm.py (Bedrock | Foundry | Anthropic API)
+                    │                     └─ ScanAgent: one model via llm.py
+                    │                          Anthropic SDK: Claude on Bedrock | Foundry | Anthropic API
+                    │                          OpenAI-compatible: gpt-oss-120b on Bedrock | Ollama locally
                     │                          tools: search_web (Brave) · reverse_image_search · record_finding
                     │                          every call through ScopeGuard + matching checks; every step traced
                     ├─ tools/hibp.py          breaches for verified emails + Pwned Passwords range
@@ -186,9 +190,11 @@ PostgreSQL (Alembic) · field-level encryption · OpenTelemetry (optional)
 Why a hand-written loop instead of Bedrock Agents or an agent framework: the
 invariants above have to sit between the model and the tools, in code that's
 tested and evaluated. The model provider is a setting, and the agent code is
-identical on all three. On the Anthropic API, refusal fallbacks are on
-(`fallbacks: "default"`); Bedrock and Foundry don't offer them server-side,
-so there a refusal ends the scan as "refused".
+identical for every one: Claude through the Anthropic SDK, or any
+OpenAI-compatible endpoint through `openai_compat.py`, which translates the
+message shape in both directions. On the Anthropic API, refusal fallbacks are
+on (`fallbacks: "default"`); nowhere else offers them server-side, so there a
+refusal ends the scan as "refused".
 
 ## Run it locally
 
@@ -204,7 +210,7 @@ commands: `exposure-auditor migrate`, `worker`, `stats` (latency and cost across
 scans) and `eval`.
 
 With `EA_DEMO_SCANS=true` (the local `.env` sets it), scans run the real
-agent loop, guards, persistence and plan against a scripted model and synthetic
+agent loop, guards, persistence and plan against synthetic
 search results, so the whole UI works without any keys. Demo results are titled
 `[DEMO]`, the UI shows a banner, and the app refuses to start in prod with it on.
 
@@ -247,7 +253,8 @@ is optional and only affects email lookups.
 | A model — one of: | | |
 | **Local, under Ollama** | `EA_LLM_PROVIDER=ollama`; `ollama pull qwen3:30b-a3b-instruct-2507-q4_K_M` | free; needs ~20 GB of RAM |
 | Anthropic API | `EA_LLM_PROVIDER=anthropic`, `EA_ANTHROPIC_API_KEY` | pay per token |
-| Amazon Bedrock | `EA_LLM_PROVIDER=bedrock`, AWS credentials with Claude Opus 5 access, `EA_BEDROCK_REGION` | pay per token |
+| **Amazon Bedrock, OpenAI-compatible** (the live demo) | `EA_LLM_PROVIDER=openai`, `EA_OPENAI_BASE_URL=https://bedrock-runtime.<region>.amazonaws.com/openai/v1`, a Bedrock API key in `EA_OPENAI_API_KEY`, `EA_MODEL_ID=openai.gpt-oss-120b-1:0` | $0.15 / $0.60 per million tokens |
+| Amazon Bedrock, Claude | `EA_LLM_PROVIDER=bedrock`, AWS credentials, `EA_BEDROCK_REGION`; `EA_BEDROCK_API=invoke` with an inference profile id (e.g. `eu.anthropic.claude-opus-5`) if the account isn't onboarded to Bedrock's Messages API endpoint | pay per token |
 | Microsoft Foundry | `EA_LLM_PROVIDER=foundry`, `EA_FOUNDRY_RESOURCE`, `EA_FOUNDRY_API_KEY` | pay per token |
 | Any OpenAI-compatible API (Mistral, OpenAI, Groq, …) | `EA_LLM_PROVIDER=openai`, `EA_OPENAI_BASE_URL`, `EA_OPENAI_API_KEY`, `EA_MODEL_ID` | pay per token |
 | Web search | `EA_BRAVE_API_KEY` | free tier: 1 query/second, 2,000/month |

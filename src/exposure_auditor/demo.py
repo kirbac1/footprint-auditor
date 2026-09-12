@@ -185,7 +185,7 @@ DEMO_CITY = "Helsinki"
 DEMO_BIRTH_YEAR = "1990"
 
 
-async def seed_demo_account(sessionmaker, cipher) -> None:
+async def seed_demo_account(sessionmaker, cipher, password: str = DEMO_PASSWORD) -> None:
     """Create the shared demo account if it isn't there, ready to scan.
 
     The email is 'verified' outright: there is no mailbox to send a code to,
@@ -196,13 +196,19 @@ async def seed_demo_account(sessionmaker, cipher) -> None:
 
     from .identifiers import normalize
     from .models import Identifier, User
-    from .security import hash_password
+    from .security import hash_password, verify_password
 
     async with sessionmaker() as session:
         index = cipher.blind_index("user-email", DEMO_EMAIL)
-        if await session.scalar(select(User.id).where(User.email_index == index)) is not None:
+        existing = (await session.scalars(select(User).where(User.email_index == index))).first()
+        if existing is not None:
+            # A rotated password takes effect on the next start, even where the
+            # database outlives the process.
+            if not verify_password(existing.password_hash, password):
+                existing.password_hash = hash_password(password)
+                await session.commit()
             return
-        user = User(id=DEMO_USER_ID, email_index=index, email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD))
+        user = User(id=DEMO_USER_ID, email_index=index, email=DEMO_EMAIL, password_hash=hash_password(password))
         session.add(user)
         await session.flush()
         for kind, value, status in (

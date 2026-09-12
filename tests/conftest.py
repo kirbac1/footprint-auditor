@@ -100,6 +100,10 @@ def settings(tmp_path):
         field_encryption_key=Fernet.generate_key().decode(),
         blind_index_key="test-blind-index-key-0123456789abcdef",
         hibp_api_key="test-hibp-key",
+        # Demo mode now prefers a real model when one is configured. Without
+        # this, a test's outcome would depend on whether the machine running
+        # it happens to have AWS credentials -- which is how this was found.
+        demo_scripted_model=True,
     )
 
 

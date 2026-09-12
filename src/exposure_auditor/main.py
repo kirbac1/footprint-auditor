@@ -109,9 +109,14 @@ async def service_context(
 
     sessionmaker = make_sessionmaker(engine)
     if settings.demo_scans:
+        from . import demo as demo_module
         from .demo import seed_demo_account
 
-        await seed_demo_account(sessionmaker, cipher)
+        await seed_demo_account(
+            sessionmaker,
+            cipher,
+            settings.demo_password.get_secret_value() if settings.demo_password else demo_module.DEMO_PASSWORD,
+        )
     services = Services(
         settings=settings,
         cipher=cipher,

@@ -2,6 +2,7 @@ import httpx2
 import pytest
 from conftest import CapturingSender, FakeHibp
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from exposure_auditor import demo
 from exposure_auditor.config import Settings
@@ -133,3 +134,36 @@ def test_prod_refuses_demo_scans():
             verification_delivery="aws", ses_sender="noreply@example.com", demo_scans=True,
             jwt_secret="s", field_encryption_key="k", blind_index_key="b",
         )
+
+
+def test_a_private_demo_password_is_never_published_and_the_public_one_stops_working(settings):
+    """The password in demo.py is in a public repository, so it cannot gate an
+    instance shown to named people. A configured one replaces it, and nothing
+    ever sends it to a browser -- not even with publishing switched on."""
+    private = settings.model_copy(update={
+        "demo_scans": True, "demo_account_published": True,
+        # model_copy skips validation; the env var arrives as SecretStr in a real deployment.
+        "demo_password": SecretStr("a-private-recruiter-password"),
+    })
+    http = httpx2.AsyncClient(transport=httpx2.MockTransport(FakeHibp()))
+
+    with TestClient(create_app(private, sender=CapturingSender(), http=http)) as client:
+        assert client.get("/meta").json()["demo_account"] is None
+        login = lambda pw: client.post("/auth/token", data={"username": demo.DEMO_EMAIL, "password": pw})  # noqa: E731
+        assert login("a-private-recruiter-password").status_code == 200
+        assert login(demo.DEMO_PASSWORD).status_code == 401
+
+
+def test_rotating_the_demo_password_takes_effect_on_the_next_start(settings):
+    """Where the database outlives the process, reseeding still has to replace
+    the old password rather than keep whichever came first."""
+    http = httpx2.AsyncClient(transport=httpx2.MockTransport(FakeHibp()))
+    first = settings.model_copy(update={"demo_scans": True, "demo_password": SecretStr("first-recruiter-password")})
+    second = first.model_copy(update={"demo_password": SecretStr("rotated-recruiter-password")})
+
+    with TestClient(create_app(first, sender=CapturingSender(), http=http)):
+        pass
+    with TestClient(create_app(second, sender=CapturingSender(), http=http)) as client:
+        login = lambda pw: client.post("/auth/token", data={"username": demo.DEMO_EMAIL, "password": pw})  # noqa: E731
+        assert login("rotated-recruiter-password").status_code == 200
+        assert login("first-recruiter-password").status_code == 401

@@ -310,3 +310,19 @@ def test_a_deployment_wide_cap_stops_scans_from_every_account(ctx, settings):
 
     assert refused.status_code == 429
     assert "this deployment" in refused.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("api", "expected"),
+    [("mantle", "AsyncAnthropicBedrockMantle"), ("invoke", "AsyncAnthropicBedrock")],
+)
+def test_either_bedrock_service_can_be_chosen(settings, monkeypatch, api, expected):
+    """Two services answer for Claude on AWS, and an account onboarded to one
+    is not necessarily onboarded to the other: mantle reported "the model does
+    not exist" for ids the Bedrock catalogue lists as available."""
+    import boto3
+
+    monkeypatch.setattr(boto3, "Session", lambda: SimpleNamespace(get_credentials=lambda: object()))
+    llm = make_llm(settings.model_copy(update={"llm_provider": "bedrock", "bedrock_api": api}))
+
+    assert type(llm._client).__name__ == expected

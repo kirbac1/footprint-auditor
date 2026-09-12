@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     llm_provider: Literal["bedrock", "foundry", "anthropic", "ollama", "openai"] = "bedrock"
     model_id: str | None = None  # defaults per provider, see resolved_model_id
     bedrock_region: str = "eu-central-1"
+    # Two different services answer for "Claude on AWS". mantle is the Messages
+    # API endpoint (bedrock-mantle:CreateInference against a project); invoke is
+    # the classic bedrock:InvokeModel path, which is what an account with the
+    # ordinary Bedrock catalogue and inference profiles can call. If mantle
+    # answers "the model does not exist" for ids that `aws bedrock
+    # list-foundation-models` clearly shows, the account is not onboarded to it:
+    # use invoke, with an inference profile id such as
+    # eu.anthropic.claude-opus-5 in EA_MODEL_ID.
+    bedrock_api: Literal["mantle", "invoke"] = "mantle"
     foundry_resource: str | None = None
     foundry_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
@@ -102,6 +111,11 @@ class Settings(BaseSettings):
     # shown to a named audience: the credentials are handed out with the link,
     # and the model budget is then spent only by people who were given it.
     demo_account_published: bool = True
+    # The demo account's password, for an instance shown to a named audience.
+    # Unset, it is the public one in demo.py -- fine for an open demo, useless
+    # as a gate, since the repository that contains it is public. Set, it is
+    # never published anywhere, and changing it rotates the login on restart.
+    demo_password: SecretStr | None = None
     # Off closes sign-ups on a public instance without closing the door on
     # the people who already have credentials.
     registration_open: bool = True

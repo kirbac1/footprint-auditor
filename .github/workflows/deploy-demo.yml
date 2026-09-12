@@ -98,6 +98,7 @@ jobs:
             EA_FIELD_ENCRYPTION_KEY=EA_FIELD_ENCRYPTION_KEY:latest
             EA_BLIND_INDEX_KEY=EA_BLIND_INDEX_KEY:latest
             EA_OPENAI_API_KEY=EA_OPENAI_API_KEY:latest
+            EA_DEMO_PASSWORD=EA_DEMO_PASSWORD:latest
 
       - name: Check the deployment answers
         env:

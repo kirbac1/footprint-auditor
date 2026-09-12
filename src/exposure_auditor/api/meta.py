@@ -21,7 +21,8 @@ async def meta(services: Services = Depends(get_services)) -> dict:
         # their own details into a server that answers with fiction.
         "demo_account": (
             {"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD}
-            if s.demo_scans and s.demo_account_published
+            # A private password is never published, whatever the other flag says.
+            if s.demo_scans and s.demo_account_published and s.demo_password is None
             else None
         ),
         "registration_open": s.registration_open,

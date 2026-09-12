@@ -83,7 +83,19 @@ It reads the key from `.env`, or asks with a hidden prompt; makes one real call
 to the model with it, with the header on stdin rather than the command line;
 and stores it in Secret Manager only if that call succeeds.
 
-## 3. Turn it on
+## 3. Make the recruiter login private
+
+```bash
+./deploy/cloudrun/set-demo-password.sh
+```
+
+The demo account's default password is in `demo.py`, and the repository is
+public, so it gates nothing. This generates a new one, stores it as
+`EA_DEMO_PASSWORD`, and prints it once in your terminal for you to send to the
+people you choose. The app never publishes a configured password, and running
+the script again rotates it on the next deploy.
+
+## 4. Turn it on
 
 ```bash
 gh variable set MODEL_PROVIDER --body bedrock

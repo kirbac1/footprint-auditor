@@ -64,6 +64,10 @@ def make_llm(settings: Settings) -> LLM | None:
             if boto3.Session().get_credentials() is None:
                 log.warning("no AWS credentials found; scans are disabled")
                 return None
+            if settings.bedrock_api == "invoke":
+                from anthropic import AsyncAnthropicBedrock
+
+                return LLM(AsyncAnthropicBedrock(aws_region=settings.bedrock_region), provider, False)
             from anthropic import AsyncAnthropicBedrockMantle
 
             return LLM(AsyncAnthropicBedrockMantle(aws_region=settings.bedrock_region), provider, False)
