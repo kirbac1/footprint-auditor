@@ -28,36 +28,18 @@ keeps inference in the EU; check the model is offered there before settling.
 Then create an access key for it. That key can invoke one model family and
 nothing else: it cannot read S3, create instances or see your bill.
 
-## 2. Store the key (you paste the values; they never pass through a terminal
-argument or a repository secret)
+## 2. Store the key
 
 ```bash
-gcloud secrets create AWS_ACCESS_KEY_ID --replication-policy=automatic
-gcloud secrets create AWS_SECRET_ACCESS_KEY --replication-policy=automatic
-
-# Each of these prints a prompt, waits for you to paste, and echoes nothing.
-# A blank line with no prompt is what a silent read looks like -- hence the
-# printf, so it is obvious the shell is waiting for you rather than stuck.
-printf 'AWS access key ID: '; read -rs KEY; echo
-printf '%s' "$KEY" | gcloud secrets versions add AWS_ACCESS_KEY_ID --data-file=-
-
-printf 'AWS secret access key: '; read -rs SECRET; echo
-printf '%s' "$SECRET" | gcloud secrets versions add AWS_SECRET_ACCESS_KEY --data-file=-
-
-unset KEY SECRET
-
-project="$(gcloud config get-value project)"
-number="$(gcloud projects describe "$project" --format='value(projectNumber)')"
-for s in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
-  gcloud secrets add-iam-policy-binding "$s" \
-    --member "serviceAccount:$number-compute@developer.gserviceaccount.com" \
-    --role roles/secretmanager.secretAccessor
-done
+./deploy/cloudrun/set-bedrock-key.sh
 ```
 
-`read -rs` keeps the key off your screen and out of shell history; `unset`
-drops it from the shell's memory afterwards. Nothing here passes the key as a
-command argument, where it would be visible to anyone running `ps`.
+It prompts for both halves with the prompt visible and the typing hidden,
+trims stray whitespace from a paste, warns if the two look swapped, and checks
+the pair against AWS before storing anything — a key that AWS rejects never
+reaches Secret Manager. Neither half is ever a command-line argument, where
+`ps` would show it, and both are dropped from the shell afterwards. Re-running
+it adds a new version rather than failing on a conflict.
 
 ## 3. Turn it on
 
