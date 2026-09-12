@@ -1,6 +1,6 @@
 """Text folding shared by the scope guard and the matching rules.
 
-Both have to treat "Uğur Kırbaç", "Ugur Kirbac" and "ugur-kirbac" as the same
+Both have to treat "Emre Yıldız", "Emre Yildiz" and "emre-yildiz" as the same
 name: one when deciding whether a query is in scope, the other when deciding
 whether a page shows it. Keeping the rule in one place is what stops those two
 answers from drifting apart.

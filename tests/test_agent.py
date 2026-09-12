@@ -40,25 +40,25 @@ def test_scope_guard_rejects_out_of_scope_queries(query):
 @pytest.mark.parametrize(
     "query",
     [
-        "Kirbac Ugur",              # the parts, in the other order
-        "Uğur Kırbaç",              # how the name is actually spelled
-        "ugur-kirbac profile",      # as a URL slug
-        "UGUR KIRBAC site:spokeo.com",
+        "Yildiz Emre",              # the parts, in the other order
+        "Emre Yıldız",              # how the name is actually spelled
+        "emre-yildiz profile",      # as a URL slug
+        "EMRE YILDIZ site:spokeo.com",
     ],
 )
 def test_a_name_is_in_scope_however_it_is_written(query):
     """A Turkish or Finnish name reaches the guard spelled several ways. It is
     the same person each time, and refusing the accented spelling would refuse
     the one the web actually indexes."""
-    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Ugur Kirbac")])
+    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Emre Yildiz")])
     guard.check_query(query)
 
 
-@pytest.mark.parametrize("query", ["Kirbac Tampere", "Ugur Helsinki", "Maija Meikalainen"])
+@pytest.mark.parametrize("query", ["Yildiz Tampere", "Emre Helsinki", "Maija Meikalainen"])
 def test_part_of_a_name_is_not_in_scope(query):
     """Every part has to be there: a surname on its own is half a phone book,
     and a first name with a city is somebody else's search."""
-    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Ugur Kirbac")])
+    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Emre Yildiz")])
     with pytest.raises(ToolError) as exc:
         guard.check_query(query)
     assert exc.value.code == "out_of_scope"
@@ -67,8 +67,8 @@ def test_part_of_a_name_is_not_in_scope(query):
 def test_a_rejection_says_what_would_be_accepted():
     # The model has to be able to fix the query; a refusal it can't act on
     # gets repeated until the scan runs out.
-    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Ugur Kirbac")])
-    with pytest.raises(ToolError, match="Ugur Kirbac"):
+    guard = ScopeGuard([ScopedIdentifier("n1", "name", "Emre Yildiz")])
+    with pytest.raises(ToolError, match="Emre Yildiz"):
         guard.check_query("data broker removal")
 
 

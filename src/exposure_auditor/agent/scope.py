@@ -36,7 +36,7 @@ class ScopedIdentifier:
 class ScopeGuard:
     def __init__(self, identifiers: list[ScopedIdentifier]) -> None:
         # A name counts when every part of it is in the query, in any order and
-        # however it is accented: "Kirbac Ugur Tampere" and "Uğur Kırbaç" are
+        # however it is accented: "Yildiz Emre Tampere" and "Emre Yıldız" are
         # both searches for the account holder. Requiring all the parts is what
         # keeps the surname alone -- which is half a city -- out of scope.
         self._terms: list[list[str]] = []

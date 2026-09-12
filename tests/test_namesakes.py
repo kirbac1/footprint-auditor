@@ -264,30 +264,30 @@ def test_finding_verdicts_are_tenant_isolated(ctx):
 @pytest.mark.parametrize(
     "text",
     [
-        "Kirbac, Ugur — Trepo, Tampereen yliopisto",   # citation order
-        "Ugur A. Kirbac | LinkedIn",                    # a middle initial
-        "Kirbač, Uğur: diplomityö",                     # spelled as it really is
-        "ugurkirbac.fi - etusivu",                      # run together in a domain
+        "Yildiz, Emre — Trepo, Tampereen yliopisto",   # citation order
+        "Emre A. Yildiz | LinkedIn",                    # a middle initial
+        "Yıldız, Emre: diplomityö",                     # spelled as it really is
+        "emreyildiz.fi - etusivu",                      # run together in a domain
     ],
 )
 def test_a_name_is_visible_however_the_page_writes_it(text):
     """Requiring one contiguous string hid a person's own website, their
     thesis and their LinkedIn behind a punctuation mark."""
-    assert shows(ScopedIdentifier("n1", "name", "Ugur Kirbac"), text)
+    assert shows(ScopedIdentifier("n1", "name", "Emre Yildiz"), text)
 
 
-@pytest.mark.parametrize("text", ["Ugur Eroglu, 38 - Clifton, NJ", "Michael Kirbac, 71", "Maija Meikalainen"])
+@pytest.mark.parametrize("text", ["Emre Eroglu, 38 - Clifton, NJ", "Michael Yildiz, 71", "Maija Meikalainen"])
 def test_someone_who_shares_half_a_name_is_not_a_match(text):
-    assert not shows(ScopedIdentifier("n1", "name", "Ugur Kirbac"), text)
+    assert not shows(ScopedIdentifier("n1", "name", "Emre Yildiz"), text)
 
 
 def test_a_directory_page_listing_both_halves_stays_for_review():
     """The cost of matching the parts: a people-search index page that lists a
-    Michael Kirbac and a Ugur Arat contains both halves of the name. It counts
+    Michael Yildiz and an Emre Arat contains both halves of the name. It counts
     as the name being visible -- and a name alone never goes into the plan, so
     the account holder is the one who decides."""
-    page = "Michael Kirbac, 71 San Bernardino, CA · Ugur Arat, 47 · Ergun Gursul"
-    ident = ScopedIdentifier("n1", "name", "Ugur Kirbac")
+    page = "Michael Yildiz, 71 San Bernardino, CA · Emre Arat, 47 · Ergun Gursul"
+    ident = ScopedIdentifier("n1", "name", "Emre Yildiz")
 
     assert shows(ident, page)
     assert STRONG_KINDS.isdisjoint({ident.kind})  # a name on its own is never strong
