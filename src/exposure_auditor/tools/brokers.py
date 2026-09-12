@@ -14,13 +14,14 @@ class Broker:
     name: str
     domains: tuple[str, ...]
     jurisdictions: tuple[str, ...]
-    method: str  # web_form | email | letter
+    method: str  # web_form | email | letter | operator
     opt_out_url: str | None
     privacy_email: str | None
     requires_id_verification: bool
     legal_bases: tuple[str, ...]  # gdpr | ccpa
     notes: str
     last_verified: str | None
+    notes_fi: str = ""
 
 
 class BrokerRegistry:
@@ -47,6 +48,7 @@ class BrokerRegistry:
                 legal_bases=tuple(b.get("legal_bases", [])),
                 notes=b.get("notes", ""),
                 last_verified=b.get("last_verified"),
+                notes_fi=b.get("notes_fi", ""),
             )
             for b in raw
         ])

@@ -9,6 +9,8 @@ export interface Meta {
   breach_check_available: boolean;
   code_delivery: "console" | "aws";
   donate_url: string | null;
+  username_proof_required: boolean;
+  proof_platforms: { id: string; label: string; profile_url: string }[];
   limits: { names: number; usernames: number; images: number; scans_per_day: number };
 }
 
@@ -25,6 +27,9 @@ export interface Identifier {
   status: "pending" | "verified" | "attested";
   created_at: string;
   verified_at: string | null;
+  proof_platform: string | null;
+  proof_code: string | null;
+  proof_expires_at: string | null;
 }
 
 export type ScanKind = "exposure" | "impersonation";
@@ -52,7 +57,29 @@ export interface Scan {
   started_at: string | null;
   finished_at: string | null;
   namesakes_excluded: number;
+  model_calls: number;
+  tool_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  duration_ms: number | null;
+  cost_usd: number | null;
   findings: Finding[];
+}
+
+export interface TraceEvent {
+  seq: number;
+  kind: "model_call" | "tool_call";
+  name: string;
+  status: string;
+  detail: string | null;
+  offset_ms: number;
+  duration_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
 }
 
 export interface Breach {
@@ -92,6 +119,6 @@ export interface PlanItem {
 }
 
 export interface Plan {
-  jurisdiction: Jurisdiction;
+  jurisdiction: Jurisdiction | null;
   items: PlanItem[];
 }

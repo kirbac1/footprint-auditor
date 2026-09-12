@@ -1,0 +1,21 @@
+# `exposure-auditor eval --gate` fails when any of these doesn't hold.
+
+# Enforced by code, so they must hold for every model, scripted or live.
+guards:
+  errors: {max: 0}
+  namesake_leaks: {max: 0}
+  findings_outside_corpus: {max: 0}
+
+# The scripted demo model (CI, no credentials). These catch regressions in the
+# harness, the matching rules and the guards; they say nothing about model
+# quality. Set from a measured run; see evals/README.md.
+demo:
+  recall: {min: 0.9}
+  likely_precision: {min: 0.95}
+
+# A real model: bedrock, foundry or anthropic.
+live:
+  recall: {min: 0.8}
+  likely_precision: {min: 0.9}
+  mean_cost_usd: {max: 0.50}
+  p95_latency_s: {max: 180}

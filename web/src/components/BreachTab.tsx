@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, errorText } from "../api";
+import { useI18n } from "../i18n";
 import type { BreachCheck, Meta } from "../types";
 
 async function sha1Hex(text: string): Promise<string> {
@@ -17,6 +18,7 @@ export function BreachTab({ hasVerified, meta }: { hasVerified: boolean; meta: M
 }
 
 function EmailBreaches({ hasVerified, meta }: { hasVerified: boolean; meta: Meta | null }) {
+  const { t } = useI18n();
   const [result, setResult] = useState<BreachCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,22 +38,17 @@ function EmailBreaches({ hasVerified, meta }: { hasVerified: boolean; meta: Meta
 
   return (
     <section className="card">
-      <h2>Is your email in a data breach?</h2>
-      <p className="muted">
-        Looks up your verified email addresses in Have I Been Pwned. Only addresses you've verified are sent.
-      </p>
+      <h2>{t("breach.title")}</h2>
+      <p className="muted">{t("breach.intro")}</p>
       <button className="primary" onClick={() => void check()} disabled={busy || !hasVerified || !configured}>
-        {busy ? "Checking…" : "Check my verified emails"}
+        {busy ? t("breach.checking") : t("breach.check")}
       </button>
-      {!configured && <p className="hint">Breach lookups are not configured on this server (needs an HIBP API key).</p>}
+      {!configured && <p className="hint">{t("breach.notConfigured")}</p>}
       {error && <p className="error">{error}</p>}
       {result && (
         <div className="result">
           {result.breaches.length === 0 ? (
-            <p className="success">
-              No known breaches for your {result.checked_identifiers} verified email
-              {result.checked_identifiers === 1 ? "" : "s"}.
-            </p>
+            <p className="success">{t("breach.none", { n: result.checked_identifiers })}</p>
           ) : (
             <ul className="rows">
               {result.breaches.map((b) => (
@@ -61,14 +58,14 @@ function EmailBreaches({ hasVerified, meta }: { hasVerified: boolean; meta: Meta
                     <span className="muted">
                       {b.domain} · {b.breach_date}
                     </span>
-                    {b.data_classes.includes("Passwords") && <span className="pill failed">Passwords exposed</span>}
+                    {b.data_classes.includes("Passwords") && <span className="pill failed">{t("breach.passwords")}</span>}
                   </div>
                   <p className="muted">{b.data_classes.join(", ")}</p>
                 </li>
               ))}
             </ul>
           )}
-          {result.breaches.length > 0 && <p className="hint">Each breach is now an item in your action plan.</p>}
+          {result.breaches.length > 0 && <p className="hint">{t("breach.inPlan")}</p>}
         </div>
       )}
     </section>
@@ -76,6 +73,7 @@ function EmailBreaches({ hasVerified, meta }: { hasVerified: boolean; meta: Meta
 }
 
 function PasswordCheck() {
+  const { lang, t } = useI18n();
   const [password, setPassword] = useState("");
   const [result, setResult] = useState<{ prefix: string; count: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,35 +99,30 @@ function PasswordCheck() {
 
   return (
     <form className="card" onSubmit={check}>
-      <h2>Has a password leaked?</h2>
-      <p className="muted">
-        Your password never leaves this browser. It is hashed here, and only the first 5 characters of the hash are
-        sent. The match is checked on your side.
-      </p>
+      <h2>{t("pw.title")}</h2>
+      <p className="muted">{t("pw.intro")}</p>
       <div className="inline-form">
         <input
           type="password"
           autoComplete="off"
-          placeholder="A password you use"
-          aria-label="Password to check"
+          placeholder={t("pw.placeholder")}
+          aria-label={t("pw.label")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
         <button className="primary" disabled={busy || !password}>
-          Check
+          {t("pw.check")}
         </button>
       </div>
       {error && <p className="error">{error}</p>}
       {result &&
         (result.count > 0 ? (
-          <p className="error">
-            Seen {result.count.toLocaleString()} times in breaches. Stop using it anywhere and change it where you have.
-          </p>
+          <p className="error">{t("pw.seen", { n: result.count.toLocaleString(lang === "fi" ? "fi-FI" : undefined) })}</p>
         ) : (
-          <p className="success">Not found in known breaches. That doesn't make it strong, just not known.</p>
+          <p className="success">{t("pw.notFound")}</p>
         ))}
-      {result && <p className="hint">Sent to the server: {result.prefix}</p>}
+      {result && <p className="hint">{t("pw.sent", { prefix: result.prefix })}</p>}
     </form>
   );
 }

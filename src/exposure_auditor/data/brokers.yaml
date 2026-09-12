@@ -118,13 +118,23 @@ brokers:
     notes: Marketing-data broker; has no public profile pages, so discovery will rarely surface it. Listed for completeness of the opt-out sweep.
     last_verified: null
 
+  # Fonecta's own privacy pages direct removal requests for number and address
+  # listings to your telephone operator, which forwards them to every directory
+  # service (checked via Fonecta's privacy statement and support FAQ, 2026-09-11).
   - id: fonecta
     name: Fonecta (Finder.fi)
     domains: [finder.fi, fonecta.fi]
     jurisdictions: [FI, EU]
-    method: letter
-    opt_out_url: null
+    method: operator
+    opt_out_url: https://www.fonecta.fi/ehdot-ja-tietosuoja/tietosuoja
     requires_id_verification: false
     legal_bases: [gdpr]
-    notes: Finnish directory service. Look up the current privacy contact on their site and send the GDPR erasure/objection letter.
+    notes: >-
+      Fonecta asks people to make removal requests through their telephone operator,
+      which passes them on to every directory service. Ask for an unlisted number and
+      address; the letter below covers anything the operator route doesn't.
+    notes_fi: >-
+      Fonecta ohjaa tekemään poistopyynnöt oman puhelinoperaattorin kautta, joka välittää
+      ne kaikille numeropalveluille. Pyydä salaista numeroa ja osoitetta; alla oleva
+      kirje kattaa sen, mitä operaattorin kautta ei hoideta.
     last_verified: null

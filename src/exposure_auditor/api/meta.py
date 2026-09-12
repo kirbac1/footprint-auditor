@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from ..deps import get_services
 from ..services import Services
+from ..tools.profile_proof import PLATFORMS
 
 router = APIRouter(tags=["meta"])
 
@@ -18,6 +19,10 @@ async def meta(services: Services = Depends(get_services)) -> dict:
         "breach_check_available": s.hibp_api_key is not None,
         "code_delivery": s.verification_delivery,
         "donate_url": s.donate_url,
+        "username_proof_required": not s.allow_unproven_usernames,
+        "proof_platforms": [
+            {"id": p.id, "label": p.label, "profile_url": p.profile_url} for p in PLATFORMS.values()
+        ],
         "limits": {
             "names": s.max_attested_names,
             "usernames": s.max_attested_usernames,

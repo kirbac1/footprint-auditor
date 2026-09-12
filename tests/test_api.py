@@ -180,7 +180,7 @@ def test_one_scan_at_a_time_and_daily_quota(ctx, settings):
 def test_tenant_isolation(ctx):
     alice = login(ctx.client, "alice@example.com")
     scan_id, name = _run_scan_with_spokeo_hit(ctx, alice)
-    item_id = ctx.client.get("/remediation-plan", headers=alice).json()["items"][0]["id"]
+    item_id = ctx.client.post("/remediation-plan", headers=alice).json()["items"][0]["id"]
 
     bob = login(ctx.client, "bob@example.com")
     assert ctx.client.get(f"/scan/{scan_id}", headers=bob).status_code == 404
@@ -239,7 +239,7 @@ def test_remediation_plan(ctx):
     }]
     ctx.client.post("/breach-check", headers=headers)
 
-    plan = ctx.client.get("/remediation-plan?jurisdiction=EU", headers=headers).json()
+    plan = ctx.client.post("/remediation-plan?jurisdiction=EU", headers=headers).json()
     items = plan["items"]
     assert items[0]["action_type"] == "change_password" and items[0]["priority"] == 0
     spokeo = next(i for i in items if i["title"] == "Opt out of Spokeo")
@@ -249,7 +249,7 @@ def test_remediation_plan(ctx):
 
     r = ctx.client.patch(f"/remediation-plan/items/{spokeo['id']}", json={"status": "sent"}, headers=headers)
     assert r.status_code == 200
-    ca = ctx.client.get("/remediation-plan?jurisdiction=US-CA", headers=headers).json()["items"]
+    ca = ctx.client.post("/remediation-plan?jurisdiction=US-CA", headers=headers).json()["items"]
     spokeo_ca = next(i for i in ca if i["title"] == "Opt out of Spokeo")
     assert spokeo_ca["id"] == spokeo["id"] and spokeo_ca["status"] == "sent"
     assert "1798.105" in spokeo_ca["draft"]
@@ -259,7 +259,7 @@ def test_remediation_plan(ctx):
 def test_account_erasure(ctx):
     headers = login(ctx.client)
     _run_scan_with_spokeo_hit(ctx, headers)
-    ctx.client.get("/remediation-plan", headers=headers)
+    ctx.client.post("/remediation-plan", headers=headers)
     assert ctx.client.delete("/me", headers=headers).status_code == 204
     assert ctx.client.get("/identifiers", headers=headers).status_code == 401
 

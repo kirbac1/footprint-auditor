@@ -1,0 +1,22 @@
+id: username-exact-match
+description: >
+  A username that is a prefix of someone else's. "plaine88" is a different
+  account; claiming it shows "plaine" must be refused.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Pekka Laine"}
+  - {id: u1, kind: username, value: "plaine"}
+  - {id: e1, kind: email, value: "pekka.laine@example.com"}
+pages:
+  - url: https://github.com/plaine
+    title: "Pekka Laine (plaine) · GitHub"
+    snippet: "Backend developer. Contact pekka.laine@example.com"
+    truth: subject
+  - url: https://github.com/plaine88
+    title: "P. Laine (plaine88) · GitHub"
+    snippet: "Game mods and speedrun tools."
+    truth: namesake
+  - url: https://www.spokeo.com/Pekka-Laine/p9
+    title: "Pekka Laine, Lahti, age 60s"
+    snippet: "Landline and address history"
+    truth: namesake

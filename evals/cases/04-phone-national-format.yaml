@@ -1,0 +1,24 @@
+id: phone-national-format
+description: >
+  The phone number is stored in international format but pages print it the
+  Finnish way. One directory lists it; another lists a namesake with a
+  different number in another city.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Aino Korhonen"}
+  - {id: p1, kind: phone, value: "+358401112223"}
+  - {id: e1, kind: email, value: "aino.korhonen@example.com"}
+  - {id: c1, kind: city, value: "Jyväskylä"}
+pages:
+  - url: https://www.fastpeoplesearch.com/aino-korhonen_id_31
+    title: "Aino Korhonen - Jyväskylä"
+    snippet: "Mobile 040 111 2223 · address on Kauppakatu"
+    truth: subject
+  - url: https://www.truepeoplesearch.com/find/aino-korhonen/kuopio
+    title: "Aino Korhonen - Kuopio"
+    snippet: "Mobile 040 111 9999 · address history in Kuopio"
+    truth: namesake
+  - url: https://classifieds.example.net/ads/4411
+    title: "Sofa for sale, call 040 111 2223"
+    snippet: "Pickup only. Ask for Aino."
+    truth: subject

@@ -1,3 +1,4 @@
+import type { Lang } from "./i18n";
 import type {
   BreachCheck,
   Finding,
@@ -11,6 +12,7 @@ import type {
   PlanItem,
   Scan,
   ScanKind,
+  TraceEvent,
 } from "./types";
 
 export class ApiError extends Error {
@@ -27,28 +29,49 @@ export class ApiError extends Error {
 // reading it. Access tokens expire after 30 minutes regardless.
 const TOKEN_KEY = "footprint.token";
 
-function readToken(): string | null {
+const ISSUED_KEY = "footprint.token.issued";
+const REFRESH_AFTER_MS = 20 * 60 * 1000; // tokens live 30 minutes
+
+function readItem(key: string): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_KEY);
+    return sessionStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-let token: string | null = readToken();
+let token: string | null = readItem(TOKEN_KEY);
+let issuedAt = Number(readItem(ISSUED_KEY) ?? 0);
 let onUnauthorized: () => void = () => {};
 
 export function setToken(value: string | null): void {
   token = value;
+  issuedAt = value ? Date.now() : 0;
   try {
-    if (value) sessionStorage.setItem(TOKEN_KEY, value);
-    else sessionStorage.removeItem(TOKEN_KEY);
+    if (value) {
+      sessionStorage.setItem(TOKEN_KEY, value);
+      sessionStorage.setItem(ISSUED_KEY, String(issuedAt));
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(ISSUED_KEY);
+    }
   } catch {
     // Storage blocked: the token still works for this page load.
   }
 }
 
 export const hasToken = (): boolean => token !== null;
+
+/** Swap the token for a fresh one once it's 20 minutes old. */
+export async function refreshIfStale(): Promise<void> {
+  if (!token || Date.now() - issuedAt < REFRESH_AFTER_MS) return;
+  try {
+    const res = await request<{ access_token: string }>("POST", "/auth/refresh");
+    setToken(res.access_token);
+  } catch {
+    // An expired token lands in the 401 handler, which signs the user out.
+  }
+}
 
 export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
@@ -113,20 +136,29 @@ export const api = {
   },
   verify: (id: string, code: string) => request<Identifier>("POST", `/identifiers/${id}/verify`, { code }),
   resend: (id: string) => request<unknown>("POST", `/identifiers/${id}/resend`),
+  startProof: (id: string, platform: string) =>
+    request<Identifier>("POST", `/identifiers/${id}/proof`, { platform }),
+  checkProof: (id: string) => request<Identifier>("POST", `/identifiers/${id}/proof/check`),
   deleteIdentifier: (id: string) => request<void>("DELETE", `/identifiers/${id}`),
 
-  startScan: (kind: ScanKind) =>
-    request<{ scan_id: string; status: string }>("POST", kind === "exposure" ? "/scan" : "/impersonation-check"),
+  /** `language` sets the language of the model's explanations and summary. */
+  startScan: (kind: ScanKind, language: Lang) =>
+    request<{ scan_id: string; status: string }>(
+      "POST",
+      `${kind === "exposure" ? "/scan" : "/impersonation-check"}?language=${language}`,
+    ),
   scans: () => request<Scan[]>("GET", "/scans"),
   scan: (id: string) => request<Scan>("GET", `/scan/${id}`),
+  scanTrace: (id: string) => request<TraceEvent[]>("GET", `/scan/${id}/trace`),
   confirmFinding: (id: string) => request<Finding>("POST", `/findings/${id}/confirm`),
   notMe: (id: string) => request<void>("POST", `/findings/${id}/not-me`),
 
   breachCheck: () => request<BreachCheck>("POST", "/breach-check"),
   passwordRange: (prefix: string) => request<PasswordRange>("POST", "/breach-check/password-range", { sha1_prefix: prefix }),
 
-  plan: (jurisdiction: Jurisdiction) =>
-    request<Plan>("GET", `/remediation-plan?jurisdiction=${encodeURIComponent(jurisdiction)}`),
+  /** Rebuilds the plan from current findings; GET would only read the last one. */
+  plan: (jurisdiction: Jurisdiction, language: Lang) =>
+    request<Plan>("POST", `/remediation-plan?jurisdiction=${encodeURIComponent(jurisdiction)}&language=${language}`),
   updateItem: (id: string, status: ItemStatus) =>
     request<PlanItem>("PATCH", `/remediation-plan/items/${id}`, { status }),
 };

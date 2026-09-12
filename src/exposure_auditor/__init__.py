@@ -1,4 +1,1 @@
-def main() -> None:
-    import uvicorn
-
-    uvicorn.run("exposure_auditor.main:create_app", factory=True, host="127.0.0.1", port=8000)
+"""Personal data exposure auditor. Entry point: exposure_auditor.cli:main."""

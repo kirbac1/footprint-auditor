@@ -11,13 +11,15 @@ from .. import audit
 from ..deps import get_services, get_session, rate_limited_user
 from ..identifiers import ATTESTED_KINDS, CONTEXT_CAPS, InvalidIdentifier, index_form, normalize
 from ..models import Identifier, User, new_id, utcnow
-from ..schemas import IdentifierIn, IdentifierOut, VerifyIn
+from ..schemas import IdentifierIn, IdentifierOut, ProofStartIn, VerifyIn
 from ..services import Services
+from ..tools.profile_proof import PLATFORMS, ProfileNotFound, ProofError, fetch_bio, new_code
 
 router = APIRouter(prefix="/identifiers", tags=["identifiers"])
 
 CODE_TTL = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
+PROOF_TTL = timedelta(hours=24)
 _IMAGE_MAGIC = ((b"\xff\xd8\xff", "jpeg"), (b"\x89PNG\r\n\x1a\n", "png"))
 
 
@@ -188,12 +190,70 @@ async def resend_code(
         raise HTTPException(status.HTTP_409_CONFLICT, "this identifier is not awaiting verification")
     # Codes go to a third party's inbox if someone adds an address that isn't
     # theirs; cap how often we'll message it.
-    retry = services.limiter.hit(f"resend:{row.id}", 3, 3600)
+    retry = await services.limiter.hit(f"resend:{row.id}", 3, 3600)
     if retry is not None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many codes sent; try again later")
     await _issue_code(services, row)
     await session.commit()
     return {"status": "sent"}
+
+
+@router.post("/{identifier_id}/proof", response_model=IdentifierOut)
+async def start_username_proof(
+    identifier_id: str,
+    body: ProofStartIn,
+    user: User = Depends(rate_limited_user),
+    session: AsyncSession = Depends(get_session),
+) -> Identifier:
+    """Issue a code for the user to put in their public bio on the platform."""
+    row = await _owned(session, user, identifier_id)
+    if row.kind != "username":
+        raise HTTPException(status.HTTP_409_CONFLICT, "only usernames are proven with a profile code")
+    if row.status == "verified":
+        raise HTTPException(status.HTTP_409_CONFLICT, "this username is already verified")
+    row.proof_platform = body.platform
+    row.proof_code = new_code()
+    row.proof_expires_at = utcnow() + PROOF_TTL
+    audit.record(session, user.id, "username_proof_started", "identifier", row.id)
+    await session.commit()
+    return row
+
+
+@router.post("/{identifier_id}/proof/check", response_model=IdentifierOut)
+async def check_username_proof(
+    identifier_id: str,
+    user: User = Depends(rate_limited_user),
+    services: Services = Depends(get_services),
+    session: AsyncSession = Depends(get_session),
+) -> Identifier:
+    """Look the code up in the profile's public bio; verified if it's there."""
+    row = await _owned(session, user, identifier_id)
+    if row.kind != "username" or not row.proof_code or not row.proof_platform:
+        raise HTTPException(status.HTTP_409_CONFLICT, "start a proof first to get a code")
+    if row.proof_expires_at is None or row.proof_expires_at < utcnow():
+        raise HTTPException(status.HTTP_410_GONE, "the code has expired; get a new one")
+    # Each check is a request to the platform on the user's behalf; keep it polite.
+    if await services.limiter.hit(f"proof:{row.id}", 10, 3600) is not None:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many checks; try again later")
+    platform = PLATFORMS[row.proof_platform]
+    try:
+        bio = await fetch_bio(services.http, row.proof_platform, row.value)
+    except ProfileNotFound as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+    except ProofError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
+    if row.proof_code not in bio:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"The code isn't in {platform.where} yet. After you save it, it can take a minute to show up.",
+        )
+    row.status = "verified"
+    row.verified_at = utcnow()
+    row.proof_code = None
+    row.proof_expires_at = None
+    audit.record(session, user.id, "identifier_verified", "identifier", row.id)
+    await session.commit()
+    return row
 
 
 @router.delete("/{identifier_id}", status_code=status.HTTP_204_NO_CONTENT)

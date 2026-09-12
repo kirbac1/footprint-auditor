@@ -1,36 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { api, errorText } from "../api";
-import type { ContextKind, Identifier, IdentityKind, Kind, Meta } from "../types";
+import { useI18n, type MessageKey, type Translate } from "../i18n";
+import type { ContextKind, Identifier, IdentityKind, Meta } from "../types";
 
-const KIND_LABEL: Record<Kind, string> = {
-  email: "Email",
-  phone: "Phone",
-  name: "Name",
-  username: "Username",
-  image: "Photo",
-  city: "City",
-  birth_year: "Birth year",
-  workplace: "Workplace",
-};
-
-const PLACEHOLDER: Record<IdentityKind, string> = {
-  email: "you@example.com",
-  phone: "+358 40 123 4567",
-  name: "First Last",
-  username: "your_handle",
-};
-
-const CONTEXT_PLACEHOLDER: Record<ContextKind, string> = {
-  city: "A city you live or have lived in",
-  birth_year: "1990",
-  workplace: "An employer or school",
-};
-
-const STATUS_LABEL: Record<Identifier["status"], string> = {
-  pending: "Awaiting code",
-  verified: "Verified",
-  attested: "Confirmed by you",
-};
+const kindLabel = (t: Translate, kind: string) => t(`kind.${kind}` as MessageKey);
 
 interface Props {
   identifiers: Identifier[];
@@ -39,17 +12,14 @@ interface Props {
 }
 
 export function DetailsTab({ identifiers, meta, onChange }: Props) {
+  const { t } = useI18n();
   return (
     <div className="stack">
       <section className="card">
-        <h2>Your details</h2>
-        <p className="muted">
-          Checks only ever cover what is listed here. Emails and phone numbers are verified with a one-time code.
-          Names, usernames and photos can't be verified automatically, so you confirm they're yours. They are only
-          used once you have verified at least one email or phone.
-        </p>
+        <h2>{t("details.title")}</h2>
+        <p className="muted">{t("details.intro")}</p>
         {identifiers.length === 0 ? (
-          <p className="empty">Nothing added yet. Start with your email address.</p>
+          <p className="empty">{t("details.empty")}</p>
         ) : (
           <ul className="rows">
             {identifiers.map((i) => (
@@ -65,10 +35,23 @@ export function DetailsTab({ identifiers, meta, onChange }: Props) {
   );
 }
 
+function statusText(t: Translate, i: Identifier, meta: Meta | null): string {
+  if (i.status === "verified" && i.proof_platform) {
+    const platform = meta?.proof_platforms.find((p) => p.id === i.proof_platform)?.label ?? i.proof_platform;
+    return t("status.verifiedVia", { platform });
+  }
+  if (i.kind === "username" && i.status !== "verified" && (meta?.username_proof_required ?? true)) {
+    return t("status.notVerified");
+  }
+  return t(`status.${i.status}` as MessageKey);
+}
+
 function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifier; meta: Meta | null; onChange: () => Promise<void> }) {
+  const { t } = useI18n();
   const [code, setCode] = useState("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const unproven = i.kind === "username" && i.status !== "verified" && (meta?.username_proof_required ?? true);
 
   async function run(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
@@ -90,7 +73,7 @@ function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifi
   }
 
   function remove() {
-    if (window.confirm(`Remove this ${KIND_LABEL[i.kind].toLowerCase()} and everything found for it?`)) {
+    if (window.confirm(t("details.removeConfirm", { kind: kindLabel(t, i.kind).toLowerCase() }))) {
       void run(() => api.deleteIdentifier(i.id));
     }
   }
@@ -98,11 +81,11 @@ function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifi
   return (
     <li className="row">
       <div className="row-main">
-        <span className="kind">{KIND_LABEL[i.kind]}</span>
+        <span className="kind">{kindLabel(t, i.kind)}</span>
         <span className="value">{i.value}</span>
-        <span className={`pill ${i.status}`}>{STATUS_LABEL[i.status]}</span>
+        <span className={`pill ${unproven ? "pending" : i.status}`}>{statusText(t, i, meta)}</span>
         <button className="ghost small" onClick={remove} disabled={busy}>
-          Remove
+          {t("details.remove")}
         </button>
       </div>
       {i.status === "pending" && (
@@ -111,34 +94,120 @@ function IdentifierRow({ identifier: i, meta, onChange }: { identifier: Identifi
             inputMode="numeric"
             pattern="\d{6}"
             maxLength={6}
-            placeholder="6-digit code"
-            aria-label={`Verification code for ${i.value}`}
+            placeholder={t("details.codePlaceholder")}
+            aria-label={t("details.codeLabel", { value: i.value })}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
             required
           />
           <button className="primary small" disabled={busy || code.length !== 6}>
-            Verify
+            {t("details.verify")}
           </button>
           <button
             type="button"
             className="ghost small"
             disabled={busy}
-            onClick={() => void run(() => api.resend(i.id), "A new code is on its way.")}
+            onClick={() => void run(() => api.resend(i.id), t("details.codeSent"))}
           >
-            Send a new code
+            {t("details.resend")}
           </button>
-          {meta?.code_delivery === "console" && (
-            <span className="hint">Local server: the code is printed in the API log.</span>
-          )}
+          {meta?.code_delivery === "console" && <span className="hint">{t("details.consoleHint")}</span>}
         </form>
+      )}
+      {i.kind === "username" && i.status !== "verified" && (
+        <UsernameProof identifier={i} meta={meta} onChange={onChange} />
       )}
       {message && <p className={message.error ? "error" : "success"}>{message.text}</p>}
     </li>
   );
 }
 
+function UsernameProof({ identifier: i, meta, onChange }: { identifier: Identifier; meta: Meta | null; onChange: () => Promise<void> }) {
+  const { t } = useI18n();
+  const platforms = meta?.proof_platforms ?? [];
+  const [platform, setPlatform] = useState(i.proof_platform ?? platforms[0]?.id ?? "github");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const current = platforms.find((p) => p.id === i.proof_platform);
+  const required = meta?.username_proof_required ?? true;
+
+  async function act(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      await onChange();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const picker = (
+    <select
+      value={platform}
+      onChange={(e) => setPlatform(e.target.value)}
+      aria-label={t("proof.platformLabel", { value: i.value })}
+    >
+      {platforms.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div className="proof">
+      {i.proof_code && current ? (
+        <>
+          <p className="muted">{t("proof.instructions", { platform: current.label })}</p>
+          <div className="inline-form">
+            <code className="proof-code">{i.proof_code}</code>
+            <button type="button" className="small" onClick={() => void navigator.clipboard.writeText(i.proof_code ?? "")}>
+              {t("proof.copy")}
+            </button>
+            <a
+              className="button small"
+              href={current.profile_url.replace("{handle}", encodeURIComponent(i.value))}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t("proof.open", { platform: current.label })}
+            </a>
+            <button type="button" className="primary small" disabled={busy} onClick={() => void act(() => api.checkProof(i.id))}>
+              {busy ? t("proof.checking") : t("proof.check")}
+            </button>
+          </div>
+          <div className="inline-form">
+            {picker}
+            <button type="button" className="ghost small" disabled={busy} onClick={() => void act(() => api.startProof(i.id, platform))}>
+              {t("proof.newCode")}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="inline-form">
+          <span className="hint">{required ? t("proof.required") : t("proof.optional")}</span>
+          {picker}
+          <button
+            type="button"
+            className="primary small"
+            disabled={busy || platforms.length === 0}
+            onClick={() => void act(() => api.startProof(i.id, platform))}
+          >
+            {t("proof.getCode")}
+          </button>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AddIdentifier({ onChange }: { onChange: () => Promise<void> }) {
+  const { t } = useI18n();
   const [kind, setKind] = useState<IdentityKind>("email");
   const [value, setValue] = useState("");
   const [attest, setAttest] = useState(false);
@@ -164,29 +233,29 @@ function AddIdentifier({ onChange }: { onChange: () => Promise<void> }) {
 
   return (
     <form className="card" onSubmit={submit}>
-      <h3>Add a detail</h3>
+      <h3>{t("details.addTitle")}</h3>
       <div className="inline-form">
-        <select value={kind} onChange={(e) => setKind(e.target.value as IdentityKind)} aria-label="Kind">
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-          <option value="name">Full name</option>
-          <option value="username">Username</option>
+        <select value={kind} onChange={(e) => setKind(e.target.value as IdentityKind)} aria-label={t("details.kindLabel")}>
+          <option value="email">{t("details.optEmail")}</option>
+          <option value="phone">{t("details.optPhone")}</option>
+          <option value="name">{t("details.optName")}</option>
+          <option value="username">{t("details.optUsername")}</option>
         </select>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={PLACEHOLDER[kind]}
-          aria-label="Value"
+          placeholder={t(`ph.${kind}` as MessageKey)}
+          aria-label={t("details.valueLabel")}
           required
         />
         <button className="primary" disabled={busy || (needsAttest && !attest)}>
-          {needsAttest ? "Add" : "Add and send code"}
+          {needsAttest ? t("details.add") : t("details.addAndSend")}
         </button>
       </div>
       {needsAttest && (
         <label className="check">
           <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
-          This {kind} is mine. I understand Footprint can't verify it and relies on my word.
+          {kind === "username" ? t("details.attestUsername") : t("details.attestName")}
         </label>
       )}
       {error && <p className="error">{error}</p>}
@@ -195,6 +264,7 @@ function AddIdentifier({ onChange }: { onChange: () => Promise<void> }) {
 }
 
 function AddContext({ onChange }: { onChange: () => Promise<void> }) {
+  const { t } = useI18n();
   const [kind, setKind] = useState<ContextKind>("city");
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -217,28 +287,24 @@ function AddContext({ onChange }: { onChange: () => Promise<void> }) {
 
   return (
     <form className="card" onSubmit={submit}>
-      <h3>Tell yourself apart from people with the same name</h3>
-      <p className="muted">
-        Many people share a name. A city, your birth year or a workplace lets the scan keep results about you and
-        leave out the ones about someone else. These details are only used for that comparison. They are never
-        searched for on their own.
-      </p>
+      <h3>{t("context.title")}</h3>
+      <p className="muted">{t("context.intro")}</p>
       <div className="inline-form">
-        <select value={kind} onChange={(e) => setKind(e.target.value as ContextKind)} aria-label="Detail">
-          <option value="city">City</option>
-          <option value="birth_year">Birth year</option>
-          <option value="workplace">Workplace or school</option>
+        <select value={kind} onChange={(e) => setKind(e.target.value as ContextKind)} aria-label={t("context.detailLabel")}>
+          <option value="city">{t("context.optCity")}</option>
+          <option value="birth_year">{t("context.optBirthYear")}</option>
+          <option value="workplace">{t("context.optWorkplace")}</option>
         </select>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={CONTEXT_PLACEHOLDER[kind]}
+          placeholder={t(`ph.${kind}` as MessageKey)}
           inputMode={kind === "birth_year" ? "numeric" : undefined}
-          aria-label="Detail value"
+          aria-label={t("context.valueLabel")}
           required
         />
         <button className="primary" disabled={busy}>
-          Add
+          {t("details.add")}
         </button>
       </div>
       {error && <p className="error">{error}</p>}
@@ -247,6 +313,7 @@ function AddContext({ onChange }: { onChange: () => Promise<void> }) {
 }
 
 function AddPhoto({ meta, onChange }: { meta: Meta | null; onChange: () => Promise<void> }) {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [attest, setAttest] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -272,25 +339,25 @@ function AddPhoto({ meta, onChange }: { meta: Meta | null; onChange: () => Promi
 
   return (
     <form className="card" onSubmit={submit}>
-      <h3>Add a photo of you</h3>
+      <h3>{t("photo.title")}</h3>
       <p className="muted">
-        Used by the impersonation check to find profiles reusing your picture.
-        {meta && !meta.reverse_image_available && " Reverse-image search is not configured on this server yet."}
+        {t("photo.intro")}
+        {meta && !meta.reverse_image_available && t("photo.noReverse")}
       </p>
       <div className="inline-form">
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          aria-label="Photo"
+          aria-label={t("photo.label")}
         />
         <button className="primary" disabled={busy || !file || !attest}>
-          Upload
+          {t("photo.upload")}
         </button>
       </div>
       <label className="check">
         <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
-        This is a photo of me.
+        {t("photo.attest")}
       </label>
       {error && <p className="error">{error}</p>}
     </form>

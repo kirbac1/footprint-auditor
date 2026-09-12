@@ -31,6 +31,10 @@ class VerifyIn(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
 
 
+class ProofStartIn(BaseModel):
+    platform: Literal["github", "bluesky"]
+
+
 class IdentifierOut(_Out):
     id: str
     kind: str
@@ -38,6 +42,9 @@ class IdentifierOut(_Out):
     status: str
     created_at: datetime
     verified_at: datetime | None
+    proof_platform: str | None = None
+    proof_code: str | None = None
+    proof_expires_at: datetime | None = None
 
 
 class FindingOut(_Out):
@@ -62,7 +69,29 @@ class ScanOut(_Out):
     started_at: datetime | None
     finished_at: datetime | None
     namesakes_excluded: int = 0
+    model_calls: int = 0
+    tool_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    duration_ms: int | None = None
+    cost_usd: float | None = None
     findings: list[FindingOut] = []
+
+
+class ScanEventOut(_Out):
+    seq: int
+    kind: str
+    name: str
+    status: str
+    detail: str | None
+    offset_ms: int
+    duration_ms: int
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
 
 
 class ScanAccepted(BaseModel):
@@ -113,7 +142,7 @@ class RemediationItemOut(_Out):
 
 
 class RemediationPlanOut(BaseModel):
-    jurisdiction: str
+    jurisdiction: str | None
     items: list[RemediationItemOut]
 
 

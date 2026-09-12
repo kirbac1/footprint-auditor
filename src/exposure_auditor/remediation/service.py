@@ -7,7 +7,7 @@ from .plan import build_plan
 
 
 async def refresh_plan(
-    session: AsyncSession, services: Services, user: User, jurisdiction: str
+    session: AsyncSession, services: Services, user: User, jurisdiction: str, language: str = "en"
 ) -> list[RemediationItem]:
     """Rebuild the plan and upsert it, keeping the status the user set on each item."""
     idents = (await session.scalars(select(Identifier).where(Identifier.user_id == user.id))).all()
@@ -26,7 +26,8 @@ async def refresh_plan(
 
     planned = build_plan(
         jurisdiction=jurisdiction,
-        holder_name=names[0] if names else "[Your full name]",
+        language=language,
+        holder_name=names[0] if names else ("[Koko nimesi]" if language == "fi" else "[Your full name]"),
         contact_email=verified_emails[0][1] if verified_emails else user.email,
         verified_emails=verified_emails,
         findings=list(latest.values()),
@@ -54,6 +55,22 @@ async def refresh_plan(
         item.detail = p.detail
         item.url = p.url
         item.draft = p.draft
+        item.active = True
         current.append(item)
+    planned_keys = {p.dedupe_key for p in planned}
+    for key, item in existing.items():
+        if key not in planned_keys:
+            item.active = False
     await session.commit()
     return current
+
+
+async def current_plan(session: AsyncSession, user: User) -> list[RemediationItem]:
+    """The plan as last built, without rebuilding it."""
+    rows = (
+        await session.scalars(
+            select(RemediationItem).where(RemediationItem.user_id == user.id, RemediationItem.active.is_(True))
+        )
+    ).all()
+    # Titles are encrypted, so order in Python rather than in SQL.
+    return sorted(rows, key=lambda i: (i.priority, i.title))

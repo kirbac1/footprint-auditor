@@ -1,0 +1,26 @@
+id: common-name-without-context
+description: >
+  A very common name and no context details. Name-only pages can't be told
+  apart, so none of them may be marked "likely"; they should be left for the
+  person to review. The one page showing the email is certain.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Mikko Virtanen"}
+  - {id: e1, kind: email, value: "mikko.virtanen.1985@example.com"}
+pages:
+  - url: https://www.spokeo.com/Mikko-Virtanen/p11
+    title: "Mikko Virtanen, Espoo"
+    snippet: "Phone number and address history"
+    truth: subject
+  - url: https://www.spokeo.com/Mikko-Virtanen/p12
+    title: "Mikko Virtanen, Turku"
+    snippet: "Phone number and address history"
+    truth: namesake
+  - url: https://www.peoplefinders.com/name/mikko-virtanen/rovaniemi
+    title: "Mikko Virtanen - Rovaniemi"
+    snippet: "Age, relatives and previous addresses"
+    truth: namesake
+  - url: https://forum.example.net/threads/used-bikes/881
+    title: "Selling a road bike - contact Mikko Virtanen"
+    snippet: "Reach me at mikko.virtanen.1985@example.com, pickup in Espoo."
+    truth: subject

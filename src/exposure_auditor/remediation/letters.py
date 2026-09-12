@@ -37,6 +37,39 @@ Kind regards,
 """
 
 
+_NOTE_FI = (
+    "[Tarkista ennen lähettämistä. Tämä on malliteksti, ei oikeudellinen neuvo. "
+    "Poista tiedot, joita et halua jakaa.]"
+)
+
+
+def gdpr_erasure_fi(recipient: str, holder_name: str, contact_email: str, urls: list[str]) -> str:
+    """The GDPR letter in Finnish, for a Finnish recipient."""
+    listing = "\n".join(f"   - {u}" for u in urls) if urls else "   - (kaikki minua koskevat tietonne)"
+    return f"""{_NOTE_FI}
+
+Aihe: Tietojen poistamista ja käsittelyn vastustamista koskeva pyyntö (tietosuoja-asetus, 17 ja 21 artikla)
+
+{recipient} / tietosuojavastaava
+
+Käytän EU:n yleisen tietosuoja-asetuksen (EU) 2016/679 mukaisia oikeuksiani.
+
+1. Tietojen poistaminen (17 artikla). Pyydän poistamaan kaikki minua koskevat henkilötiedot, mukaan lukien seuraavat julkaisut:
+{listing}
+
+2. Käsittelyn vastustaminen (21 artikla). Vastustan henkilötietojeni käsittelyä, myös suoramarkkinointia ja profilointia varten. Jos käsittely perustuu oikeutettuun etuunne, katson, ettei se syrjäytä etujani, oikeuksiani ja vapauksiani.
+
+3. Vastaanottajat (19 artikla). Pyydän ilmoittamaan poistosta kaikille, joille olette luovuttaneet tietojani, ja kertomaan minulle, keitä he ovat.
+
+Tietojeni löytämiseksi voitte käyttää seuraavia tietoja: {holder_name}, {contact_email}. 12 artiklan 6 kohdan mukaan voitte pyytää lisätietoja vain, jos teillä on perusteltua syytä epäillä henkilöllisyyttäni, ja vain sen verran kuin on tarpeen.
+
+Pyydän vastaamaan ilman aiheetonta viivytystä ja viimeistään kuukauden kuluessa pyynnön vastaanottamisesta (12 artiklan 3 kohta).
+
+Ystävällisin terveisin
+{holder_name}
+"""
+
+
 def ccpa_delete(recipient: str, holder_name: str, contact_email: str, urls: list[str]) -> str:
     return f"""{_NOTE}
 

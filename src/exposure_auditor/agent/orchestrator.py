@@ -1,4 +1,4 @@
-"""The scan agent: Claude on Bedrock driving scope-guarded tools.
+"""The scan agent: Claude driving scope-guarded tools.
 
 A manual tool-use loop rather than Bedrock Agents or the SDK tool runner,
 because each tool enforces an invariant the model must not be able to
@@ -7,21 +7,25 @@ bypass:
 - findings can only point at URLs a tool returned in this scan;
 - every "this page shows X" claim is checked against the text the model was
   given (matching.py), so a namesake can't be passed off as the account holder.
+
+Every model call and tool call is also recorded as a TraceEvent: names,
+outcome codes, token counts and timings, never content.
 """
 
 import asyncio
 import itertools
 import json
 import logging
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ..identifiers import CONTEXT_KINDS
 from ..tools.brokers import BrokerRegistry
 from ..tools.reverse_image import ReverseImageProvider
 from ..tools.search import SearchError, SearchProvider, SearchResult
-from .matching import IDENTITY_KINDS, STRONG_KINDS, shows
+from .matching import IDENTITY_KINDS, STRONG_KINDS, addresses_the_agent, shows
 from .prompts import system_prompt, task_message
 from .scope import ScopedIdentifier, ScopeGuard, ToolError
 
@@ -130,12 +134,43 @@ class RecordedFinding:
 
 
 @dataclass
+class TraceEvent:
+    kind: Literal["model_call", "tool_call"]
+    name: str
+    status: str
+    detail: str | None
+    start_ns: int
+    end_ns: int
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+
+@dataclass
 class AgentOutcome:
     status: Literal["completed", "refused", "turn_limit"]
     findings: list[RecordedFinding]
     summary: str
     searches_run: int
     namesakes_excluded: int = 0
+    events: list[TraceEvent] = field(default_factory=list)
+
+
+def _usage_of(response: Any) -> tuple[int, int, int, int]:
+    # Top-level usage is the attempt that produced the returned message, which
+    # is the billed one; a refusal before any output isn't billed at all.
+    usage = getattr(response, "usage", None)
+
+    def get(name: str) -> int:
+        return int(getattr(usage, name, 0) or 0) if usage is not None else 0
+
+    return (
+        get("input_tokens"),
+        get("output_tokens"),
+        get("cache_read_input_tokens"),
+        get("cache_creation_input_tokens"),
+    )
 
 
 class ScanAgent:
@@ -146,8 +181,10 @@ class ScanAgent:
         identifiers: list[ScopedIdentifier],
         images: dict[str, bytes] | None = None,
         is_suppressed: Callable[[str], bool] | None = None,
+        language: str = "en",
     ) -> None:
         self._cfg = config
+        self._language = language
         self._mode = mode
         self._identifiers = identifiers
         self._by_id = {i.id: i for i in identifiers}
@@ -160,6 +197,8 @@ class ScanAgent:
         self._findings: dict[str, RecordedFinding] = {}
         self._searches = 0
         self._namesakes = 0
+        # Public so the caller can keep the trace of a scan that failed midway.
+        self.events: list[TraceEvent] = []
 
     def _tool_defs(self) -> list[dict]:
         tools = [SEARCH_TOOL, RECORD_TOOL]
@@ -176,16 +215,40 @@ class ScanAgent:
         return missing
 
     def _outcome(self, status, summary: str) -> AgentOutcome:
-        return AgentOutcome(status, list(self._findings.values()), summary, self._searches, self._namesakes)
+        return AgentOutcome(
+            status, list(self._findings.values()), summary, self._searches, self._namesakes, list(self.events)
+        )
+
+    async def _call_model(self, **kwargs: Any) -> Any:
+        start = time.time_ns()
+        try:
+            response = await self._cfg.llm.messages.create(**kwargs)
+        except Exception as exc:
+            self.events.append(
+                TraceEvent("model_call", self._cfg.model_id, "error", type(exc).__name__, start, time.time_ns())
+            )
+            raise
+        self.events.append(
+            TraceEvent(
+                "model_call",
+                self._cfg.model_id,
+                "ok",
+                str(getattr(response, "stop_reason", "")),
+                start,
+                time.time_ns(),
+                *_usage_of(response),
+            )
+        )
+        return response
 
     async def run(self) -> AgentOutcome:
         system = system_prompt(self._mode, self._cfg.brokers)
         tools = self._tool_defs()
         messages: list[dict] = [
-            {"role": "user", "content": task_message(self._identifiers, self._unavailable())}
+            {"role": "user", "content": task_message(self._identifiers, self._unavailable(), self._language)}
         ]
         for _ in range(self._cfg.max_turns):
-            response = await self._cfg.llm.messages.create(
+            response = await self._call_model(
                 model=self._cfg.model_id,
                 max_tokens=16000,
                 system=system,
@@ -215,24 +278,29 @@ class ScanAgent:
         return self._outcome("turn_limit", "The scan stopped at its turn limit before the agent finished.")
 
     async def _run_tool(self, block) -> dict:
+        start = time.time_ns()
         try:
-            content = await self._dispatch(block.name, block.input or {})
-            return {"type": "tool_result", "tool_use_id": block.id, "content": content}
+            content, detail = await self._dispatch(block.name, block.input or {})
+            status = "ok"
+            result = {"type": "tool_result", "tool_use_id": block.id, "content": content}
         except ToolError as exc:
-            return {"type": "tool_result", "tool_use_id": block.id, "content": str(exc), "is_error": True}
+            detail, status = exc.code, "rejected"
+            result = {"type": "tool_result", "tool_use_id": block.id, "content": str(exc), "is_error": True}
+        self.events.append(TraceEvent("tool_call", str(block.name)[:64], status, detail, start, time.time_ns()))
+        return result
 
-    async def _dispatch(self, name: str, inp: dict) -> str:
+    async def _dispatch(self, name: str, inp: dict) -> tuple[str, str]:
         if name == "search_web":
             return await self._search(str(inp.get("query", "")), str(inp.get("site") or ""))
         if name == "record_finding":
             return self._record(inp)
         if name == "reverse_image_search":
             return await self._reverse_image(str(inp.get("identifier_id", "")))
-        raise ToolError(f"Unknown tool {name!r}.")
+        raise ToolError(f"Unknown tool {name!r}.", "unknown_tool")
 
-    def _remember(self, results: list[SearchResult], from_image: bool = False) -> str:
+    def _remember(self, results: list[SearchResult], from_image: bool = False) -> tuple[str, str]:
         if not results:
-            return "No results."
+            return "No results.", "results:0"
         out = []
         for r in results:
             rid = f"r{next(self._next_id)}"
@@ -240,59 +308,65 @@ class ScanAgent:
             if from_image:
                 self._image_results.add(rid)
             out.append({"result_id": rid, "url": r.url, "title": r.title, "snippet": r.snippet})
-        return json.dumps(out, ensure_ascii=False)
+        return json.dumps(out, ensure_ascii=False), f"results:{len(out)}"
 
-    async def _search(self, query: str, site: str) -> str:
+    async def _search(self, query: str, site: str) -> tuple[str, str]:
         if self._cfg.search is None:
-            raise ToolError("Web search is not configured on this deployment.")
+            raise ToolError("Web search is not configured on this deployment.", "not_configured")
         self._guard.check_query(query)
         if self._searches >= self._cfg.max_searches:
-            raise ToolError("The search budget for this scan is used up. Summarize what you have.")
+            raise ToolError("The search budget for this scan is used up. Summarize what you have.", "search_budget")
         q = f"{query} site:{ScopeGuard.check_site(site)}" if site.strip() else query
         self._searches += 1
         try:
             return self._remember(await self._cfg.search.search(q, count=10))
         except SearchError as exc:
-            raise ToolError(str(exc)) from None
+            raise ToolError(str(exc), "provider_error") from None
 
-    async def _reverse_image(self, identifier_id: str) -> str:
+    async def _reverse_image(self, identifier_id: str) -> tuple[str, str]:
         image = self._images.get(identifier_id)
         if image is None:
-            raise ToolError("identifier_id is not an in-scope image.")
+            raise ToolError("identifier_id is not an in-scope image.", "not_in_scope")
         if self._cfg.reverse_image is None:
-            raise ToolError("Reverse-image search is not configured on this deployment.")
+            raise ToolError("Reverse-image search is not configured on this deployment.", "not_configured")
         try:
             return self._remember(await self._cfg.reverse_image.search(image, count=10), from_image=True)
         except SearchError as exc:
-            raise ToolError(str(exc)) from None
+            raise ToolError(str(exc), "provider_error") from None
 
     def _shows(self, ident: ScopedIdentifier, result_id: str, text: str) -> bool:
         if ident.kind == "image":
             return result_id in self._image_results
         return shows(ident, text)
 
-    def _record(self, inp: dict) -> str:
+    def _record(self, inp: dict) -> tuple[str, str]:
         result_id = str(inp.get("result_id", ""))
         result = self._results.get(result_id)
         if result is None:
-            raise ToolError("Unknown result_id. Only results returned by a tool in this scan can be recorded.")
+            raise ToolError(
+                "Unknown result_id. Only results returned by a tool in this scan can be recorded.", "unknown_result"
+            )
         category = inp.get("category")
         confidence = inp.get("confidence")
         if category not in CATEGORIES or confidence not in CONFIDENCE:
-            raise ToolError("category or confidence is not one of the allowed values.")
+            raise ToolError("category or confidence is not one of the allowed values.", "bad_value")
 
         matched = list(dict.fromkeys(inp.get("matched_identifier_ids") or []))
         conflicts = list(dict.fromkeys(inp.get("conflicting_identifier_ids") or []))
         unknown = [i for i in matched + conflicts if i not in self._by_id]
         if unknown:
-            raise ToolError(f"Not in-scope identifier ids: {', '.join(unknown)}.")
+            raise ToolError(f"Not in-scope identifier ids: {', '.join(unknown)}.", "unknown_identifier")
         if not any(self._by_id[i].kind in IDENTITY_KINDS for i in matched):
             raise ToolError(
                 "Name at least one email, phone, name, username or image of the account holder that the "
-                "result shows. A city or workplace on its own doesn't identify anyone."
+                "result shows. A city or workplace on its own doesn't identify anyone.",
+                "no_identity",
             )
         if any(self._by_id[i].kind not in CONTEXT_KINDS for i in conflicts):
-            raise ToolError("conflicting_identifier_ids can only list context details (city, birth year, workplace).")
+            raise ToolError(
+                "conflicting_identifier_ids can only list context details (city, birth year, workplace).",
+                "bad_conflict",
+            )
 
         text = f"{result.url} {result.title} {result.snippet}"
         unseen = [self._by_id[i] for i in matched if not self._shows(self._by_id[i], result_id, text)]
@@ -300,7 +374,8 @@ class ScanAgent:
             listed = ", ".join(f"{i.kind} {i.id}" for i in unseen)
             raise ToolError(
                 f"The result's URL, title and snippet don't show: {listed}. "
-                "List only identifiers visible there."
+                "List only identifiers visible there.",
+                "claim_not_visible",
             )
 
         kinds = {self._by_id[i].kind for i in matched}
@@ -309,13 +384,18 @@ class ScanAgent:
             # Someone else with the same name: their data, not the account
             # holder's, so it is counted and never stored.
             self._namesakes += 1
-            return "Not recorded: a different person with the same name. Counted as a namesake."
+            return "Not recorded: a different person with the same name. Counted as a namesake.", "namesake"
         if self._is_suppressed is not None and self._is_suppressed(result.url):
-            return "Not recorded: the account holder has said this page is not about them."
+            return "Not recorded: the account holder has said this page is not about them.", "suppressed"
         if result.url in self._findings:
-            return "Already recorded."
+            return "Already recorded.", "duplicate"
 
         match_status = "likely" if strong or kinds & CONTEXT_KINDS else "unclear"
+        # A page that talks to AI agents is trying to steer this one. Whatever
+        # it seems to show, it doesn't go straight into the plan.
+        suspicious = addresses_the_agent(text)
+        if suspicious:
+            match_status = "unclear"
         broker = self._cfg.brokers.match_url(result.url)
         self._findings[result.url] = RecordedFinding(
             url=result.url,
@@ -327,6 +407,12 @@ class ScanAgent:
             broker_id=broker.id if broker else None,
             match_status=match_status,
         )
+        if suspicious:
+            return (
+                "Recorded for the account holder to review: the page contains text aimed at AI agents, "
+                "so it isn't trusted as a match.",
+                "suspicious_text",
+            )
         if match_status == "unclear":
-            return "Recorded for the account holder to review: only the name links this result to them."
-        return "Recorded."
+            return "Recorded for the account holder to review: only the name links this result to them.", "unclear"
+        return "Recorded.", "likely"

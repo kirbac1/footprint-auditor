@@ -9,6 +9,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # only allow PayPal, so a config typo can't send them somewhere else.
 _DONATE_HOSTS = {"paypal.com", "www.paypal.com", "paypal.me", "www.paypal.me"}
 
+_DEFAULT_MODELS = {
+    "bedrock": "anthropic.claude-opus-5",
+    "foundry": "claude-opus-5",
+    "anthropic": "claude-opus-5",
+}
+
 
 class Settings(BaseSettings):
     """Runtime configuration, read from EA_* environment variables.
@@ -30,25 +36,60 @@ class Settings(BaseSettings):
     field_encryption_key: SecretStr
     blind_index_key: SecretStr
 
+    # All three providers serve Claude through the Anthropic SDK; the agent
+    # code is identical, only the client differs (see llm.py).
+    llm_provider: Literal["bedrock", "foundry", "anthropic"] = "bedrock"
+    model_id: str | None = None  # defaults per provider, see resolved_model_id
     bedrock_region: str = "eu-central-1"
-    model_id: str = "anthropic.claude-opus-5"
+    foundry_resource: str | None = None
+    foundry_api_key: SecretStr | None = None
+    anthropic_api_key: SecretStr | None = None
     agent_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     agent_max_turns: int = 24
     agent_max_searches: int = 40
+    # USD per million tokens, for the cost shown on each scan. The defaults
+    # are Claude Opus 5's first-party list price; Bedrock and Foundry price
+    # separately, so set these to what you are actually billed.
+    price_input_per_mtok: float = 5.0
+    price_output_per_mtok: float = 25.0
 
     hibp_api_key: SecretStr | None = None
     brave_api_key: SecretStr | None = None
 
-    verification_delivery: Literal["console", "aws"] = "console"
+    # console and outbox are for local work and tests only; prod refuses both.
+    verification_delivery: Literal["console", "outbox", "aws"] = "console"
     ses_sender: str | None = None
+    outbox_path: str = "outbox.jsonl"
 
-    # Local UI work without AWS: scans run the real agent loop against a
-    # scripted model and synthetic search results (see demo.py).
+    # inline: scans run as background tasks in the API process (dev, tests).
+    # worker: the API only queues them; `exposure-auditor worker` runs them.
+    scan_execution: Literal["inline", "worker"] = "inline"
+    worker_poll_seconds: float = 2.0
+    # Export scan traces as OpenTelemetry spans; the exporter itself is
+    # configured with the standard OTEL_EXPORTER_OTLP_* variables.
+    otel_enabled: bool = False
+
+    # Local UI work without a model or search key: scans run the real agent
+    # loop against a scripted model and synthetic results (see demo.py).
     demo_scans: bool = False
     # Built frontend (web/dist). Detected next to the source tree if unset.
     web_dist: str | None = None
     # PayPal donate link shown in the UI header; no button when unset.
     donate_url: str | None = None
+
+    rate_limit_per_minute: int = 30
+    scans_per_day: int = 5
+    max_attested_names: int = 3
+    max_attested_usernames: int = 5
+    max_attested_images: int = 5
+    max_image_bytes: int = 4 * 1024 * 1024
+    # Usernames are only searched once proven with a code in a public bio.
+    # Turning this on lets merely attested usernames into scans again.
+    allow_unproven_usernames: bool = False
+
+    @property
+    def resolved_model_id(self) -> str:
+        return self.model_id or _DEFAULT_MODELS[self.llm_provider]
 
     @field_validator("donate_url")
     @classmethod
@@ -60,20 +101,13 @@ class Settings(BaseSettings):
             raise ValueError("EA_DONATE_URL must be an https:// link on paypal.com or paypal.me")
         return v
 
-    rate_limit_per_minute: int = 30
-    scans_per_day: int = 5
-    max_attested_names: int = 3
-    max_attested_usernames: int = 5
-    max_attested_images: int = 5
-    max_image_bytes: int = 4 * 1024 * 1024
-
     @model_validator(mode="after")
     def _prod_guards(self) -> "Settings":
         if self.env == "prod":
-            if self.verification_delivery == "console":
-                # The console sender writes codes to the log; in prod that would
-                # let anyone with log access verify identifiers they don't own.
-                raise ValueError("EA_VERIFICATION_DELIVERY=console is not allowed in prod")
+            if self.verification_delivery in ("console", "outbox"):
+                # Both write codes somewhere readable; in prod that would let
+                # anyone with log or disk access verify identifiers they don't own.
+                raise ValueError(f"EA_VERIFICATION_DELIVERY={self.verification_delivery} is not allowed in prod")
             if self.database_url.startswith("sqlite"):
                 raise ValueError("prod requires a Postgres EA_DATABASE_URL")
             if self.demo_scans:

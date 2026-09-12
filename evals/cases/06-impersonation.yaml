@@ -1,0 +1,23 @@
+id: impersonation
+description: >
+  An impersonation check. The person's real profile, a copy account that
+  reuses the name with a username variant, and an unrelated artist with the
+  same name in another city.
+mode: impersonation
+identifiers:
+  - {id: n1, kind: name, value: "Aino Korhonen"}
+  - {id: u1, kind: username, value: "aino_k"}
+  - {id: c1, kind: city, value: "Jyväskylä"}
+pages:
+  - url: https://www.instagram.com/aino_k/
+    title: "Aino Korhonen (@aino_k) · Jyväskylä"
+    snippet: "Trail running and too much coffee."
+    truth: subject
+  - url: https://www.instagram.com/aino_k_official/
+    title: "Aino Korhonen (@aino_k_official)"
+    snippet: "Same photos as @aino_k; account created last month."
+    truth: subject
+  - url: https://www.instagram.com/ainokorhonen.art/
+    title: "Aino Korhonen · Artist · Rovaniemi"
+    snippet: "Paintings of Lapland. Studio in Rovaniemi."
+    truth: namesake

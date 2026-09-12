@@ -15,3 +15,11 @@ web/dist/
 
 # Local agent / editor config
 .claude/
+
+# Test artefacts
+e2e.db
+e2e-outbox.jsonl
+outbox.jsonl
+eval-report.json
+web/playwright-report/
+web/test-results/

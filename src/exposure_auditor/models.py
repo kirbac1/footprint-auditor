@@ -3,14 +3,18 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     LargeBinary,
+    MetaData,
     String,
     Text,
     UniqueConstraint,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -63,8 +67,17 @@ class UTCDateTime(TypeDecorator):
         return value.replace(tzinfo=UTC)
 
 
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
 class Base(DeclarativeBase):
-    pass
+    # Deterministic constraint names, so migrations can refer to them.
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class User(Base):
@@ -101,6 +114,11 @@ class Identifier(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # Username proof: a code the user posts in a public profile bio. The code
+    # isn't secret (it is posted publicly), so it's stored as-is.
+    proof_platform: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    proof_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    proof_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
 
 class Scan(Base):
@@ -109,6 +127,8 @@ class Scan(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(16))  # exposure | impersonation
+    # Language for the model's rationales and summary: en | fi.
+    language: Mapped[str] = mapped_column(String(8), default="en", server_default="en")
     status: Mapped[str] = mapped_column(String(16), default="queued")
     summary: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -117,6 +137,15 @@ class Scan(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     # Results about other people with the same name: counted, never stored.
     namesakes_excluded: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # What the run cost: totals over the ScanEvent rows.
+    model_calls: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class Finding(Base):
@@ -137,6 +166,41 @@ class Finding(Base):
     # confirmed: they said "this is me".
     match_status: Mapped[str] = mapped_column(String(16), default="likely", server_default="likely")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ScanEvent(Base):
+    """One step of a scan: a model call or a tool call.
+
+    Deliberately free of content: names, outcome codes, token counts and
+    timings only. A trace that held queries or page text would be a second
+    copy of the user's personal data, unencrypted and easy to forget.
+    """
+
+    __tablename__ = "scan_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scan_id: Mapped[str] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))  # model_call | tool_call
+    name: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    detail: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    offset_ms: Mapped[int] = mapped_column(Integer)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class RateLimitWindow(Base):
+    """Fixed-window request counters, shared by every API replica."""
+
+    __tablename__ = "rate_limit_windows"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    window_start: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class FindingSuppression(Base):
@@ -184,6 +248,9 @@ class RemediationItem(Base):
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
     draft: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="open")
+    # Part of the plan as last built; items that no longer apply keep their
+    # row (and the user's status on it) but drop out of the plan.
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 

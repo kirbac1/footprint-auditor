@@ -1,19 +1,13 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "../api";
+import { useI18n, type MessageKey } from "../i18n";
 import type { ItemStatus, Jurisdiction, PlanItem } from "../types";
 
-const JURISDICTIONS: [Jurisdiction, string][] = [
-  ["FI", "Finland"],
-  ["EU", "EU / EEA"],
-  ["US-CA", "California"],
-  ["US", "Elsewhere in the US"],
-  ["OTHER", "Somewhere else"],
-];
-
-const PRIORITY = ["Do this first", "High priority", "Worth doing", "When you have time"];
-const STATUS_LABEL: Record<ItemStatus, string> = { open: "To do", sent: "Request sent", done: "Done", dismissed: "Not relevant" };
+const JURISDICTIONS: Jurisdiction[] = ["FI", "EU", "US-CA", "US", "OTHER"];
+const STATUSES: ItemStatus[] = ["open", "sent", "done", "dismissed"];
 
 export function PlanTab() {
+  const { lang, t } = useI18n();
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction>("FI");
   const [items, setItems] = useState<PlanItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,13 +16,13 @@ export function PlanTab() {
     let cancelled = false;
     setError(null);
     api
-      .plan(jurisdiction)
+      .plan(jurisdiction, lang)
       .then((plan) => !cancelled && setItems(plan.items))
       .catch((err) => !cancelled && setError(errorText(err)));
     return () => {
       cancelled = true;
     };
-  }, [jurisdiction]);
+  }, [jurisdiction, lang]);
 
   async function setStatus(item: PlanItem, status: ItemStatus) {
     try {
@@ -45,42 +39,37 @@ export function PlanTab() {
     <div className="stack">
       <section className="card">
         <div className="card-head">
-          <h2>Your action plan</h2>
+          <h2>{t("plan.title")}</h2>
           <label className="compact">
-            I live in
+            {t("plan.liveIn")}
             <select value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value as Jurisdiction)}>
-              {JURISDICTIONS.map(([id, label]) => (
+              {JURISDICTIONS.map((id) => (
                 <option key={id} value={id}>
-                  {label}
+                  {t(`jur.${id}` as MessageKey)}
                 </option>
               ))}
             </select>
           </label>
         </div>
-        <p className="muted">
-          Built from your scans and breach checks. Where you live decides which removal law the letters cite. Nothing
-          here is sent for you. Removal requests are yours to send, and some sites will ask you to prove who you are.
-        </p>
+        <p className="muted">{t("plan.intro")}</p>
         {items && items.length > 0 && (
-          <div className="meter" aria-label={`${finished} of ${items.length} done`}>
+          <div className="meter" aria-label={t("plan.progress", { done: finished, total: items.length })}>
             <div className="meter-bar">
               <div className="meter-fill" style={{ width: `${(finished / items.length) * 100}%` }} />
             </div>
-            <span>
-              {finished} of {items.length} done
-            </span>
+            <span>{t("plan.progress", { done: finished, total: items.length })}</span>
           </div>
         )}
         {error && <p className="error">{error}</p>}
       </section>
 
-      {items === null && !error && <p className="muted">Building your plan…</p>}
-      {PRIORITY.map((label, priority) => {
+      {items === null && !error && <p className="muted">{t("plan.building")}</p>}
+      {[0, 1, 2, 3].map((priority) => {
         const group = items?.filter((i) => i.priority === priority) ?? [];
         if (group.length === 0) return null;
         return (
           <section key={priority} className="plan-group">
-            <h3 className={`priority p${priority}`}>{label}</h3>
+            <h3 className={`priority p${priority}`}>{t(`prio.${priority}` as MessageKey)}</h3>
             {group.map((item) => (
               <PlanCard key={item.id} item={item} onStatus={(s) => void setStatus(item, s)} />
             ))}
@@ -92,6 +81,7 @@ export function PlanTab() {
 }
 
 function PlanCard({ item, onStatus }: { item: PlanItem; onStatus: (s: ItemStatus) => void }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const closed = item.status === "done" || item.status === "dismissed";
 
@@ -109,11 +99,11 @@ function PlanCard({ item, onStatus }: { item: PlanItem; onStatus: (s: ItemStatus
         <select
           value={item.status}
           onChange={(e) => onStatus(e.target.value as ItemStatus)}
-          aria-label={`Status of ${item.title}`}
+          aria-label={t("plan.statusLabel", { title: item.title })}
         >
-          {(Object.keys(STATUS_LABEL) as ItemStatus[]).map((s) => (
+          {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {STATUS_LABEL[s]}
+              {t(`item.${s}` as MessageKey)}
             </option>
           ))}
         </select>
@@ -122,16 +112,16 @@ function PlanCard({ item, onStatus }: { item: PlanItem; onStatus: (s: ItemStatus
       <div className="plan-actions">
         {item.url && (
           <a className="button" href={item.url} target="_blank" rel="noopener noreferrer">
-            {item.action_type === "opt_out" ? "Open the opt-out page" : "Open page"}
+            {item.action_type === "opt_out" ? t("plan.openOptOut") : t("plan.openPage")}
           </a>
         )}
       </div>
       {item.draft && (
         <details className="draft">
-          <summary>Removal request letter</summary>
+          <summary>{t("plan.letter")}</summary>
           <pre>{item.draft}</pre>
           <button className="small" onClick={() => void copy()}>
-            {copied ? "Copied" : "Copy letter"}
+            {copied ? t("plan.copied") : t("plan.copyLetter")}
           </button>
         </details>
       )}

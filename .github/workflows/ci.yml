@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check src tests scripts
+
+      - name: Tests
+        # Includes the check that the migrations build exactly the schema
+        # the models describe.
+        run: uv run pytest -q
+
+      - name: Eval gate (scripted model, no credentials)
+        # Exercises the harness, the matching rules and the guards on every
+        # push. Model quality is measured by eval-live.yml, which has credentials.
+        run: uv run exposure-auditor eval --provider demo --gate --report eval-report.json
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-report-demo
+          path: eval-report.json
+          if-no-files-found: ignore
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Build the frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        # Starts the real API (demo scans, codes to an outbox file) and drives
+        # the built UI through sign-up, verification, a scan and the plan.
+        working-directory: web
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t exposure-auditor:ci .

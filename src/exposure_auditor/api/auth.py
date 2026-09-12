@@ -66,6 +66,15 @@ async def token(
     return TokenOut(access_token=create_access_token(services.settings, user.id))
 
 
+@router.post("/auth/refresh", response_model=TokenOut)
+async def refresh(
+    user: User = Depends(get_current_user), services: Services = Depends(get_services)
+) -> TokenOut:
+    """Swap a still-valid token for a fresh one. The UI calls this while the
+    user is active, so a session only lapses after 30 idle minutes."""
+    return TokenOut(access_token=create_access_token(services.settings, user.id))
+
+
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)) -> dict:
     return {"id": user.id, "email": user.email, "created_at": user.created_at}

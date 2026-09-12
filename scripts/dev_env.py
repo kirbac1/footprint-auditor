@@ -24,9 +24,13 @@ EA_VERIFICATION_DELIVERY=console
 # Used by docker-compose.yml for the local Postgres service.
 POSTGRES_PASSWORD={secrets.token_urlsafe(24)}
 
-# Scans: Claude on Bedrock. Uses your normal AWS credentials (AWS_PROFILE etc.).
+# Scans: Claude through one of three providers.
+#   bedrock   - your normal AWS credentials (AWS_PROFILE etc.) and EA_BEDROCK_REGION
+#   foundry   - EA_FOUNDRY_RESOURCE and EA_FOUNDRY_API_KEY
+#   anthropic - EA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY)
+EA_LLM_PROVIDER=bedrock
 EA_BEDROCK_REGION=eu-central-1
-EA_MODEL_ID=anthropic.claude-opus-5
+# EA_MODEL_ID defaults per provider; set it only to pin a different model.
 
 # Optional providers. Leave commented out to run without them.
 # EA_HIBP_API_KEY=

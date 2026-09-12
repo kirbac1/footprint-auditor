@@ -56,14 +56,28 @@ class CapturingSender:
 
 
 class FakeHibp:
-    """MockTransport handler for HIBP; records what was sent."""
+    """MockTransport handler for the outside services (HIBP, and the GitHub and
+    Bluesky profile APIs used for username proofs); records what was sent."""
 
     def __init__(self):
         self.breaches: dict[str, list[dict]] = {}
+        self.bios: dict[tuple[str, str], str] = {}  # (platform, handle) -> bio
         self.requests: list[httpx2.Request] = []
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
+        if request.url.host == "api.github.com":
+            handle = unquote(request.url.path.rsplit("/", 1)[-1])
+            bio = self.bios.get(("github", handle.lower()))
+            if bio is None:
+                return httpx2.Response(404, json={"message": "Not Found"})
+            return httpx2.Response(200, json={"login": handle, "bio": bio})
+        if request.url.host == "public.api.bsky.app":
+            handle = request.url.params.get("actor", "")
+            bio = self.bios.get(("bluesky", handle.lower()))
+            if bio is None:
+                return httpx2.Response(400, json={"error": "InvalidRequest", "message": "Profile not found"})
+            return httpx2.Response(200, json={"handle": handle, "description": bio})
         if request.url.host == "haveibeenpwned.com":
             email = unquote(request.url.path.rsplit("/", 1)[-1])
             found = self.breaches.get(email)

@@ -1,0 +1,35 @@
+id: broker-listings-with-context
+description: >
+  The same name on several people-search sites. City and birth year are
+  known, so every namesake listing is contradicted by at least one detail.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Maija Meikäläinen"}
+  - {id: e1, kind: email, value: "maija.meikalainen@example.com"}
+  - {id: c1, kind: city, value: "Helsinki"}
+  - {id: y1, kind: birth_year, value: "1990"}
+pages:
+  - url: https://www.spokeo.com/Maija-Meikalainen/p1024
+    title: "Maija Meikäläinen, Helsinki, age 30s"
+    snippet: "Phone 040 555 0142 · Address history in Helsinki · 3 relatives"
+    truth: subject
+  - url: https://www.spokeo.com/Maija-Meikalainen/p2048
+    title: "Maija Meikäläinen, Oulu, age 70s"
+    snippet: "Landline · Previous address in Kempele"
+    truth: namesake
+  - url: https://www.whitepages.com/name/Maija-Meikalainen/helsinki
+    title: "Maija Meikäläinen in Helsinki - age 36"
+    snippet: "Current address, mobile number and email maija.meikalainen@example.com"
+    truth: subject
+  - url: https://www.fastpeoplesearch.com/maija-meikalainen_id_77
+    title: "Maija Meikäläinen, Tampere, age 50s"
+    snippet: "Possible relatives, phone numbers and past addresses in Tampere"
+    truth: namesake
+  - url: https://news.example.org/sport/2026/chess-tampere
+    title: "Maija Meikäläinen wins the Tampere rapid chess open"
+    snippet: "The Tampere club veteran, aged 58, took the title on tiebreaks."
+    truth: namesake
+  - url: https://pastebin.com/Xq3vT9
+    title: "combo list 2024 part 3"
+    snippet: "maija.meikalainen@example.com:5f4dcc3b5aa765d61d8327deb882cf99"
+    truth: subject

@@ -51,18 +51,18 @@ def _raise_limited(retry_after: float) -> None:
 async def rate_limited_user(
     user: User = Depends(get_current_user), services: Services = Depends(get_services)
 ) -> User:
-    retry = services.limiter.hit(f"user:{user.id}", services.settings.rate_limit_per_minute, 60)
+    retry = await services.limiter.hit(f"user:{user.id}", services.settings.rate_limit_per_minute, 60)
     if retry is not None:
         _raise_limited(retry)
     return user
 
 
-def client_rate_limit(bucket: str, limit: int, window_s: float):
+def client_rate_limit(bucket: str, limit: int, window_s: int):
     """For unauthenticated endpoints (register, login), keyed by client address."""
 
     async def dependency(request: Request, services: Services = Depends(get_services)) -> None:
         host = request.client.host if request.client else "unknown"
-        retry = services.limiter.hit(f"{bucket}:{host}", limit, window_s)
+        retry = await services.limiter.hit(f"{bucket}:{host}", limit, window_s)
         if retry is not None:
             _raise_limited(retry)
 

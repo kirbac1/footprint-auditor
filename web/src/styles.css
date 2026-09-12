@@ -402,6 +402,23 @@ button.small {
   width: 130px;
   letter-spacing: 0.2em;
 }
+.proof {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.proof-code {
+  font: 0.9rem ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  user-select: all;
+}
+.button.small {
+  padding: 4px 10px;
+  font-size: 0.88rem;
+}
 
 .pill {
   font-size: 0.78rem;
@@ -499,6 +516,36 @@ button.small {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 4px;
+}
+.usage {
+  margin-top: 6px;
+}
+.trace {
+  margin-top: 16px;
+}
+.trace summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.trace table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+.trace th,
+.trace td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.trace td.warn {
+  color: var(--warn);
 }
 .findings.review .finding {
   border-style: dashed;

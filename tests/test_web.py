@@ -13,6 +13,8 @@ def test_meta_describes_capabilities(ctx):
     assert meta["demo_scans"] is False
     assert meta["breach_check_available"] is True
     assert meta["code_delivery"] == "console"
+    assert meta["username_proof_required"] is True
+    assert {p["id"] for p in meta["proof_platforms"]} == {"github", "bluesky"}
 
 
 def test_security_headers_on_api_responses(ctx):
@@ -62,7 +64,7 @@ def test_demo_mode_runs_the_real_pipeline(settings):
         imp = client.get(f"/scan/{imp_id}", headers=headers).json()
         assert {f["category"] for f in imp["findings"]} == {"social_profile", "possible_impersonation"}
 
-        plan = lambda: [i["title"] for i in client.get("/remediation-plan", headers=headers).json()["items"]]  # noqa: E731
+        plan = lambda: [i["title"] for i in client.post("/remediation-plan", headers=headers).json()["items"]]  # noqa: E731
         assert "Opt out of Spokeo" in plan()
         # Name-only profiles could be a stranger's real account: nothing to
         # report until the account holder confirms.

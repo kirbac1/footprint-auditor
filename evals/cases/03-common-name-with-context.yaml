@@ -1,0 +1,39 @@
+id: common-name-with-context
+description: >
+  The same common name, now with a city and birth year. Five namesakes each
+  contradict a detail; two pages fit and should be kept.
+mode: exposure
+identifiers:
+  - {id: n1, kind: name, value: "Mikko Virtanen"}
+  - {id: e1, kind: email, value: "mikko.virtanen.1985@example.com"}
+  - {id: c1, kind: city, value: "Tampere"}
+  - {id: y1, kind: birth_year, value: "1985"}
+pages:
+  - url: https://www.spokeo.com/Mikko-Virtanen/p21
+    title: "Mikko Virtanen, Tampere, age 40s"
+    snippet: "Mobile number, current address in Tampere"
+    truth: subject
+  - url: https://www.spokeo.com/Mikko-Virtanen/p22
+    title: "Mikko Virtanen, Helsinki, age 60s"
+    snippet: "Landline and address history"
+    truth: namesake
+  - url: https://www.spokeo.com/Mikko-Virtanen/p23
+    title: "Mikko Virtanen, Oulu"
+    snippet: "Address history in Oulu and Kempele"
+    truth: namesake
+  - url: https://www.whitepages.com/name/Mikko-Virtanen/turku
+    title: "Mikko Virtanen in Turku - age 24"
+    snippet: "Student housing address"
+    truth: namesake
+  - url: https://www.fastpeoplesearch.com/mikko-virtanen_id_5
+    title: "Mikko Virtanen, Espoo, age 30s"
+    snippet: "Relatives and phone numbers"
+    truth: namesake
+  - url: https://www.radaris.com/p/Mikko/Virtanen/kuopio
+    title: "Mikko Virtanen - Kuopio"
+    snippet: "Age 71, retired, previous addresses in Kuopio"
+    truth: namesake
+  - url: https://www.linkedin.com/in/mikko-virtanen-tampere
+    title: "Mikko Virtanen - Software engineer - Tampere"
+    snippet: "Building embedded systems in Tampere since 2011."
+    truth: subject

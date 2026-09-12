@@ -1,7 +1,9 @@
 """Delivery of ownership-verification codes."""
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 from typing import Protocol
 
 log = logging.getLogger(__name__)
@@ -23,6 +25,22 @@ class ConsoleCodeSender:
 
     async def send(self, kind: str, destination: str, code: str) -> None:
         log.warning("DEV verification code for %s %s: %s", kind, _mask(destination), code)
+
+
+class OutboxCodeSender:
+    """Dev and test only: appends codes to a JSON-lines file so an end-to-end
+    test can read them back. Settings refuses this in prod."""
+
+    def __init__(self, path: str) -> None:
+        self._path = Path(path)
+
+    async def send(self, kind: str, destination: str, code: str) -> None:
+        line = json.dumps({"kind": kind, "destination": destination, "code": code})
+        await asyncio.to_thread(self._append, line)
+
+    def _append(self, line: str) -> None:
+        with self._path.open("a") as f:
+            f.write(line + "\n")
 
 
 class AwsCodeSender:

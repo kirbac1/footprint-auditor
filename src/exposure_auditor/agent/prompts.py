@@ -95,7 +95,7 @@ def _line(i: ScopedIdentifier) -> str:
     return f"- id={i.id} kind={i.kind} value={i.value}"
 
 
-def task_message(identifiers: list[ScopedIdentifier], capabilities: list[str]) -> str:
+def task_message(identifiers: list[ScopedIdentifier], capabilities: list[str], language: str = "en") -> str:
     search_terms = [i for i in identifiers if i.kind not in CONTEXT_KINDS]
     context = [i for i in identifiers if i.kind in CONTEXT_KINDS]
     parts = ["In-scope identifiers (search terms):", *map(_line, search_terms), ""]
@@ -112,4 +112,6 @@ def task_message(identifiers: list[ScopedIdentifier], capabilities: list[str]) -
         )
     missing = ", ".join(capabilities) if capabilities else "none"
     parts += ["", f"Tools unavailable on this deployment: {missing}."]
+    if language == "fi":
+        parts.append("The account holder reads Finnish: write each rationale and your final summary in Finnish.")
     return "\n".join(parts)

@@ -1,4 +1,5 @@
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -8,11 +9,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import tracing
 from .api import auth, breaches, findings, identifiers, meta, remediation, scans
 from .config import Settings, get_settings
 from .crypto import FieldCipher, configure_cipher
 from .db import create_tables, make_engine, make_sessionmaker
-from .notify import AwsCodeSender, CodeSender, ConsoleCodeSender
+from .llm import make_llm
+from .notify import AwsCodeSender, CodeSender, ConsoleCodeSender, OutboxCodeSender
 from .ratelimit import RateLimiter
 from .services import Services
 from .tools.brokers import BrokerRegistry
@@ -31,27 +34,81 @@ SPA_CSP = (
 )
 
 
-def _bedrock_client(settings: Settings):
-    # The client resolves credentials lazily, so without this check a missing
-    # credential only surfaces mid-scan as a bare RuntimeError. Checking here
-    # turns it into an immediate 503 on POST /scan instead.
-    try:
-        import boto3
-
-        if boto3.Session().get_credentials() is None:
-            log.warning("no AWS credentials found; scans are disabled")
-            return None
-        from anthropic import AsyncAnthropicBedrockMantle
-
-        return AsyncAnthropicBedrockMantle(aws_region=settings.bedrock_region)
-    except Exception as exc:
-        log.warning("Bedrock client unavailable (%s); scans are disabled", type(exc).__name__)
-        return None
-
-
 def _web_dist(settings: Settings) -> Path | None:
     path = Path(settings.web_dist) if settings.web_dist else Path(__file__).resolve().parents[2] / "web" / "dist"
     return path if (path / "index.html").is_file() else None
+
+
+def _code_sender(settings: Settings) -> CodeSender:
+    if settings.verification_delivery == "aws":
+        return AwsCodeSender(settings.bedrock_region, settings.ses_sender)
+    if settings.verification_delivery == "outbox":
+        return OutboxCodeSender(settings.outbox_path)
+    return ConsoleCodeSender()
+
+
+@asynccontextmanager
+async def service_context(
+    settings: Settings,
+    *,
+    llm: Any = _DEFAULT,
+    search: SearchProvider | None = _DEFAULT,
+    reverse_image: ReverseImageProvider | None = None,
+    sender: CodeSender | None = None,
+    http: httpx2.AsyncClient | None = None,
+) -> AsyncIterator[Services]:
+    """Everything the API, the worker and the eval runner need. Keyword
+    overrides exist so tests can swap in fakes."""
+    cipher = FieldCipher(
+        settings.field_encryption_key.get_secret_value(), settings.blind_index_key.get_secret_value()
+    )
+    configure_cipher(cipher)
+    engine = make_engine(settings.database_url)
+    if settings.env == "test":
+        # Tests build a throwaway schema directly. Everywhere else the schema
+        # comes from migrations: `exposure-auditor migrate`, which `serve` runs first.
+        await create_tables(engine)
+    client = http or httpx2.AsyncClient(timeout=20.0)
+
+    if settings.demo_scans:
+        from .demo import DemoLLM, DemoSearch
+
+        log.warning("EA_DEMO_SCANS is on: scans use a scripted model and synthetic search results")
+    if search is not _DEFAULT:
+        search_provider = search
+    elif settings.demo_scans:
+        search_provider = DemoSearch()
+    elif settings.brave_api_key:
+        search_provider = BraveSearch(client, settings.brave_api_key.get_secret_value())
+    else:
+        search_provider = None
+    if llm is not _DEFAULT:
+        llm_client = llm
+    elif settings.demo_scans:
+        llm_client = DemoLLM()
+    else:
+        llm_client = make_llm(settings)
+
+    sessionmaker = make_sessionmaker(engine)
+    services = Services(
+        settings=settings,
+        cipher=cipher,
+        sessionmaker=sessionmaker,
+        http=client,
+        hibp=HibpClient(client, settings.hibp_api_key.get_secret_value() if settings.hibp_api_key else None),
+        search=search_provider,
+        reverse_image=reverse_image,
+        llm=llm_client,
+        brokers=BrokerRegistry.load(),
+        sender=sender or _code_sender(settings),
+        limiter=RateLimiter(sessionmaker, engine.dialect.name),
+    )
+    try:
+        yield services
+    finally:
+        if http is None:
+            await client.aclose()
+        await engine.dispose()
 
 
 def create_app(
@@ -63,66 +120,17 @@ def create_app(
     sender: CodeSender | None = None,
     http: httpx2.AsyncClient | None = None,
 ) -> FastAPI:
-    """Build the app. Keyword overrides exist so tests can swap in fakes."""
     settings = settings or get_settings()
-    cipher = FieldCipher(
-        settings.field_encryption_key.get_secret_value(), settings.blind_index_key.get_secret_value()
-    )
-    configure_cipher(cipher)
+    if settings.otel_enabled:
+        tracing.configure()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        engine = make_engine(settings.database_url)
-        if settings.env != "prod":
-            await create_tables(engine)
-        client = http or httpx2.AsyncClient(timeout=20.0)
-
-        if settings.demo_scans:
-            from .demo import DemoLLM, DemoSearch
-
-            log.warning("EA_DEMO_SCANS is on: scans use a scripted model and synthetic search results")
-        if search is not _DEFAULT:
-            search_provider = search
-        elif settings.demo_scans:
-            search_provider = DemoSearch()
-        elif settings.brave_api_key:
-            search_provider = BraveSearch(client, settings.brave_api_key.get_secret_value())
-        else:
-            search_provider = None
-        if llm is not _DEFAULT:
-            llm_client = llm
-        elif settings.demo_scans:
-            llm_client = DemoLLM()
-        else:
-            llm_client = _bedrock_client(settings)
-
-        if sender is not None:
-            code_sender = sender
-        elif settings.verification_delivery == "aws":
-            code_sender = AwsCodeSender(settings.bedrock_region, settings.ses_sender)
-        else:
-            code_sender = ConsoleCodeSender()
-        app.state.services = Services(
-            settings=settings,
-            cipher=cipher,
-            sessionmaker=make_sessionmaker(engine),
-            http=client,
-            hibp=HibpClient(
-                client, settings.hibp_api_key.get_secret_value() if settings.hibp_api_key else None
-            ),
-            search=search_provider,
-            reverse_image=reverse_image,
-            llm=llm_client,
-            brokers=BrokerRegistry.load(),
-            sender=code_sender,
-            limiter=RateLimiter(),
-        )
-        try:
+        async with service_context(
+            settings, llm=llm, search=search, reverse_image=reverse_image, sender=sender, http=http
+        ) as services:
+            app.state.services = services
             yield
-        finally:
-            if http is None:
-                await client.aclose()
-            await engine.dispose()
 
     app = FastAPI(
         title="Personal Data Exposure Auditor",

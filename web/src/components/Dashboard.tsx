@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText } from "../api";
+import { useI18n, type MessageKey } from "../i18n";
 import type { Identifier, Meta } from "../types";
 import { AccountTab } from "./AccountTab";
 import { BreachTab } from "./BreachTab";
@@ -7,16 +8,18 @@ import { DetailsTab } from "./DetailsTab";
 import { PlanTab } from "./PlanTab";
 import { ScanTab } from "./ScanTab";
 
-const TABS = [
-  ["details", "Your details"],
-  ["scan", "Footprint scan"],
-  ["breaches", "Breaches"],
-  ["plan", "Action plan"],
-  ["account", "Account"],
-] as const;
-type Tab = (typeof TABS)[number][0];
+type Tab = "details" | "scan" | "breaches" | "plan" | "account";
+
+const TABS: [Tab, MessageKey][] = [
+  ["details", "tab.details"],
+  ["scan", "tab.scan"],
+  ["breaches", "tab.breaches"],
+  ["plan", "tab.plan"],
+  ["account", "tab.account"],
+];
 
 export function Dashboard({ meta, onSignedOut }: { meta: Meta | null; onSignedOut: () => void }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
   const [identifiers, setIdentifiers] = useState<Identifier[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -34,7 +37,9 @@ export function Dashboard({ meta, onSignedOut }: { meta: Meta | null; onSignedOu
     void reload();
   }, [reload]);
 
-  const hasVerified = identifiers.some((i) => i.status === "verified");
+  // Only a verified email or phone opens the gate; a proven username doesn't.
+  const hasVerified = identifiers.some((i) => i.status === "verified" && (i.kind === "email" || i.kind === "phone"));
+  const after = t("dash.verifyAfter");
 
   return (
     <div className="dashboard">
@@ -47,7 +52,7 @@ export function Dashboard({ meta, onSignedOut }: { meta: Meta | null; onSignedOu
             className={tab === id ? "tab active" : "tab"}
             onClick={() => setTab(id)}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </nav>
@@ -55,11 +60,11 @@ export function Dashboard({ meta, onSignedOut }: { meta: Meta | null; onSignedOu
       {loadError && <p className="error">{loadError}</p>}
       {!hasVerified && (tab === "scan" || tab === "breaches") && (
         <div className="banner">
-          Verify an email address or phone number under{" "}
+          {t("dash.verifyBefore")}{" "}
           <button className="inline-link" onClick={() => setTab("details")}>
-            Your details
-          </button>{" "}
-          first. Scans and breach lookups only cover details you have proven are yours.
+            {t("tab.details")}
+          </button>
+          {/^[.,]/.test(after) ? after : ` ${after}`}
         </div>
       )}
 

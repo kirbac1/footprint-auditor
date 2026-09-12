@@ -1,10 +1,23 @@
-# Local service: the API container plus Postgres, the same shape as ECS + RDS.
+# Local service: the API, a scan worker and Postgres, the same shape as the
+# planned ECS + RDS deployment.
 #
 #   docker compose up -d --build
-#   docker compose logs -f api        # verification codes appear here in dev
+#   docker compose logs -f api                 # verification codes appear here in dev
+#   docker compose --profile tracing up -d     # adds Jaeger at http://127.0.0.1:16686
 #
-# Secrets come from .env (scripts/dev_env.py writes it). Both ports stay on
+# Secrets come from .env (scripts/dev_env.py writes it). Every port stays on
 # loopback: this service holds PII and has no business on the LAN.
+
+x-app-env: &app-env
+  # Overrides the SQLite URL in .env for the containerized service.
+  EA_DATABASE_URL: postgresql+asyncpg://auditor:${POSTGRES_PASSWORD}@db:5432/auditor
+  # The API only queues scans; the worker container runs them.
+  EA_SCAN_EXECUTION: worker
+  # PayPal donate link for the header button; empty hides it.
+  EA_DONATE_URL: ${EA_DONATE_URL:-}
+  # Scan traces as OpenTelemetry spans (content-free); needs the tracing profile.
+  EA_OTEL_ENABLED: ${EA_OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
 
 services:
   db:
@@ -24,16 +37,13 @@ services:
 
   api:
     build: .
+    image: exposure-auditor:local
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     env_file: .env
-    environment:
-      # Overrides the SQLite URL in .env for the containerized service.
-      EA_DATABASE_URL: postgresql+asyncpg://auditor:${POSTGRES_PASSWORD}@db:5432/auditor
-      # PayPal donate link for the header button; empty hides it.
-      EA_DONATE_URL: ${EA_DONATE_URL:-}
+    environment: *app-env
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -41,6 +51,24 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  worker:
+    image: exposure-auditor:local
+    restart: unless-stopped
+    command: ["/app/.venv/bin/exposure-auditor", "worker"]
+    depends_on:
+      api:
+        # The API applies migrations before it reports healthy.
+        condition: service_healthy
+    env_file: .env
+    environment: *app-env
+
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    profiles: ["tracing"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686"
 
 volumes:
   pgdata:

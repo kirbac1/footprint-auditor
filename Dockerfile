@@ -26,4 +26,6 @@ RUN useradd --system --no-create-home app
 USER app
 
 EXPOSE 8000
-CMD ["/app/.venv/bin/uvicorn", "exposure_auditor.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# `serve` applies migrations, then starts the API. The worker container runs
+# the same image with `exposure-auditor worker`.
+CMD ["/app/.venv/bin/exposure-auditor", "serve", "--host", "0.0.0.0", "--port", "8000"]

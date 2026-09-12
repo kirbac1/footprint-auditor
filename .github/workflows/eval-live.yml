@@ -1,0 +1,51 @@
+name: eval-live
+
+# Runs the eval suite against a real model and gates on evals/thresholds.yaml.
+# Manual only: every run is billed. Setup is in evals/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Model provider
+        type: choice
+        options: [anthropic, bedrock]
+        default: anthropic
+
+permissions:
+  contents: read
+  id-token: write # OIDC for the AWS role, so no long-lived AWS keys live in secrets
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      PROVIDER: ${{ inputs.provider }}
+      EA_BEDROCK_REGION: ${{ vars.EA_BEDROCK_REGION || 'eu-central-1' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: AWS credentials for Bedrock
+        if: inputs.provider == 'bedrock'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_EVAL_ROLE_ARN }}
+          aws-region: ${{ vars.EA_BEDROCK_REGION || 'eu-central-1' }}
+
+      - name: Eval gate
+        run: uv run exposure-auditor eval --provider "$PROVIDER" --gate --report eval-report.json
+        env:
+          EA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-report-${{ inputs.provider }}
+          path: eval-report.json
+          if-no-files-found: ignore
