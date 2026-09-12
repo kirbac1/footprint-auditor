@@ -8,6 +8,8 @@ const en = {
   "app.demoTitle": "Demo mode.",
   "app.demoBody":
     "Scans run the real pipeline against a scripted model and synthetic search results. Scan findings on this server are not real.",
+  "app.demoBodyRealModel":
+    "The agent is real and so is the model: it chooses the searches, reads what comes back and decides what is about you, and the guards refuse it the same way they would anywhere. Only the web is synthetic \u2014 the search results are invented, so no real page is ever found and no real person appears.",
   "app.otherLanguage": "Suomi",
   "app.languageLabel": "Vaihda kieli suomeksi",
 
@@ -251,6 +253,8 @@ const fi: Record<MessageKey, string> = {
   "app.demoTitle": "Demotila.",
   "app.demoBody":
     "Skannaukset ajavat oikean käsittelyketjun käsikirjoitettua mallia ja keksittyjä hakutuloksia vastaan. Tämän palvelimen löydökset eivät ole todellisia.",
+  "app.demoBodyRealModel":
+    "Agentti on oikea ja niin on mallikin: se valitsee haut, lukee tulokset ja p\u00e4\u00e4tt\u00e4\u00e4 mik\u00e4 koskee sinua, ja vartijat est\u00e4v\u00e4t sen samalla tavalla kuin muuallakin. Vain verkko on keksitty \u2014 hakutulokset ovat synteettisi\u00e4, joten yht\u00e4k\u00e4\u00e4n oikeaa sivua tai ihmist\u00e4 ei l\u00f6ydy.",
   "app.otherLanguage": "English",
   "app.languageLabel": "Switch to English",
 

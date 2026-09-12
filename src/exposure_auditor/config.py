@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     # Local UI work without a model or search key: scans run the real agent
     # loop against a scripted model and synthetic results (see demo.py).
     demo_scans: bool = False
+    # Force the scripted model even when a provider is configured. The
+    # end-to-end tests need a scan that is instant and identical every run.
+    demo_scripted_model: bool = False
     # Built frontend (web/dist). Detected next to the source tree if unset.
     web_dist: str | None = None
     # PayPal donate link shown in the UI header; no button when unset.
@@ -105,6 +108,9 @@ class Settings(BaseSettings):
 
     rate_limit_per_minute: int = 30
     scans_per_day: int = 5
+    # Across every account on this deployment. Per-account limits do not
+    # protect a public instance: anyone can make another account. None = no cap.
+    scans_per_day_total: int | None = None
     max_attested_names: int = 3
     max_attested_usernames: int = 5
     max_attested_images: int = 5

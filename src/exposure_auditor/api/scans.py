@@ -51,6 +51,18 @@ async def _enqueue(
     )
     if recent >= services.settings.scans_per_day:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "daily scan limit reached")
+    total_cap = services.settings.scans_per_day_total
+    if total_cap is not None:
+        # A per-account limit protects nothing on a public instance, where
+        # anyone can make another account. This one is the deployment's wallet.
+        today = await session.scalar(
+            select(func.count()).select_from(Scan).where(Scan.created_at >= utcnow() - timedelta(days=1))
+        )
+        if today >= total_cap:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "this deployment has reached its scans for today; try again tomorrow",
+            )
 
     scan = Scan(id=new_id(), user_id=user.id, kind=kind, language=language, status="queued")
     session.add(scan)

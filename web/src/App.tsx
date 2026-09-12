@@ -74,7 +74,8 @@ export default function App() {
       </header>
       {meta?.demo_scans && (
         <div className="banner demo" role="note">
-          <strong>{t("app.demoTitle")}</strong> {t("app.demoBody")}
+          <strong>{t("app.demoTitle")}</strong>{" "}
+          {meta.scripted_model ? t("app.demoBody") : t("app.demoBodyRealModel")}
         </div>
       )}
       <main className="content">

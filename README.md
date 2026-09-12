@@ -1,5 +1,10 @@
 # Personal Data Exposure Auditor
 
+**[Try it](https://footprint-auditor-ndkmuej5iq-lz.a.run.app)** · the real app,
+with a scripted model and invented search results, so no real page is ever
+found. Sign in as the demo person with one click. First load waits a few
+seconds for a cold start.
+
 An app that helps a person find where **their own** data is exposed on the
 public internet, and turns that into a prioritized plan to reduce it. One model
 does the discovery and triage -- Claude Opus 5, or a model running on your own

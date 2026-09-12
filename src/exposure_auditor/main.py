@@ -72,8 +72,6 @@ async def service_context(
 
     if settings.demo_scans:
         from .demo import DemoLLM, DemoSearch
-
-        log.warning("EA_DEMO_SCANS is on: scans use a scripted model and synthetic search results")
     if search is not _DEFAULT:
         search_provider = search
     elif settings.demo_scans:
@@ -92,10 +90,22 @@ async def service_context(
         )
     if llm is not _DEFAULT:
         llm_client = llm
-    elif settings.demo_scans:
-        llm_client = DemoLLM()
     else:
-        llm_client = make_llm(settings)
+        # Demo mode replaces the *web*, not the model. A real model against
+        # synthetic pages is still a real agent: it chooses the searches, reads
+        # what comes back, and meets the same guards. It only falls back to the
+        # scripted model when no provider is configured, so the demo runs
+        # anywhere.
+        llm_client = None if (settings.demo_scans and settings.demo_scripted_model) else make_llm(settings)
+        if llm_client is None and settings.demo_scans:
+            llm_client = DemoLLM()
+    if settings.demo_scans:
+        from .demo import DemoLLM as _Scripted
+
+        log.warning(
+            "EA_DEMO_SCANS is on: search results are synthetic, model is %s",
+            "scripted" if isinstance(llm_client, _Scripted) else settings.resolved_model_id,
+        )
 
     sessionmaker = make_sessionmaker(engine)
     if settings.demo_scans:

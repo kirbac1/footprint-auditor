@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import unicodedata
+import uuid
 from types import SimpleNamespace
 
 from .agent.matching import age_fits, fold, shows
@@ -172,6 +173,11 @@ class DemoLLM:
 # A public demo instance signs everyone in as the same fictional person, so
 # nobody types their own details into a server that answers with synthetic
 # findings. Registration is refused while demo mode is on.
+# A fixed id, not a fresh one per boot. The demo's database lives in the
+# instance's /tmp and is reseeded on every cold start; with a random id, a
+# token issued before the restart would point at a user that no longer
+# exists, and the visitor would be signed out mid-click.
+DEMO_USER_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://footprint-auditor/demo"))
 DEMO_EMAIL = "demo@example.com"
 DEMO_PASSWORD = "footprint-demo-2026"  # noqa: S105 - published on the sign-in page, by design
 DEMO_NAME = "Maija Meikäläinen"
@@ -196,7 +202,7 @@ async def seed_demo_account(sessionmaker, cipher) -> None:
         index = cipher.blind_index("user-email", DEMO_EMAIL)
         if await session.scalar(select(User.id).where(User.email_index == index)) is not None:
             return
-        user = User(email_index=index, email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD))
+        user = User(id=DEMO_USER_ID, email_index=index, email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD))
         session.add(user)
         await session.flush()
         for kind, value, status in (

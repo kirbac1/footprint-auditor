@@ -12,6 +12,8 @@ const serverEnv: Record<string, string> = {
   EA_FIELD_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   EA_BLIND_INDEX_KEY: "e2e-only-blind-index-key",
   EA_DEMO_SCANS: "true",
+      // Instant and identical every run; the agent itself is covered by the evals.
+      EA_DEMO_SCRIPTED_MODEL: "true",
   EA_VERIFICATION_DELIVERY: "outbox",
   EA_OUTBOX_PATH: "e2e-outbox.jsonl",
   EA_SCAN_EXECUTION: "inline",

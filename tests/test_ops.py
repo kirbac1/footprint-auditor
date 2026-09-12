@@ -292,3 +292,21 @@ def test_a_scan_that_loses_the_model_keeps_what_it_already_found(ctx):
     # And the trace of the turns that did happen is still there.
     trace = ctx.client.get(f"/scan/{scan_id}/trace", headers=headers).json()
     assert [e["status"] for e in trace][-1] == "error"
+
+
+def test_a_deployment_wide_cap_stops_scans_from_every_account(ctx, settings):
+    """Per-account limits protect nothing in public: anyone can register
+    again. This cap is what a hosted instance spends its credits against."""
+    ctx.client.app.state.services.settings = settings.model_copy(update={"scans_per_day_total": 1})
+    first = login(ctx.client, email="one@example.com")
+    add_verified_email(ctx, first, email="one@example.com")
+    ctx.llm.script += [reply("end_turn", text("done"))]
+    assert ctx.client.post("/scan", headers=first).status_code == 202
+
+    # A different account, well inside its own allowance, is refused.
+    second = login(ctx.client, email="two@example.com", password="another-long-password")
+    add_verified_email(ctx, second, email="two@example.com")
+    refused = ctx.client.post("/scan", headers=second)
+
+    assert refused.status_code == 429
+    assert "this deployment" in refused.json()["detail"]
