@@ -78,7 +78,7 @@ export default function App() {
         </div>
       )}
       <main className="content">
-        {authed ? <Dashboard meta={meta} onSignedOut={signOut} /> : <AuthView onAuthed={() => setAuthed(true)} />}
+        {authed ? <Dashboard meta={meta} onSignedOut={signOut} /> : <AuthView meta={meta} onAuthed={() => setAuthed(true)} />}
       </main>
     </div>
   );

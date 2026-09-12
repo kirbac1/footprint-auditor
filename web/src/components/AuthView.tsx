@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, api, errorText } from "../api";
 import { useI18n } from "../i18n";
+import type { Meta } from "../types";
 
-export function AuthView({ onAuthed }: { onAuthed: () => void }) {
+export function AuthView({ meta, onAuthed }: { meta: Meta | null; onAuthed: () => void }) {
   const { t } = useI18n();
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [code, setCode] = useState("");
@@ -68,6 +69,27 @@ export function AuthView({ onAuthed }: { onAuthed: () => void }) {
       </section>
 
       <form className="card auth-card" onSubmit={submit}>
+        {meta?.demo_account && (
+          <div className="callout demo-account">
+            <strong>{t("demo.title")}</strong>
+            <p>{t("demo.body")}</p>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy}
+              onClick={() => {
+                setMode("signin");
+                setEmail(meta.demo_account!.email);
+                setPassword(meta.demo_account!.password);
+              }}
+            >
+              {t("demo.fill")}
+            </button>
+            <p className="tech">
+              {meta.demo_account.email} · {meta.demo_account.password}
+            </p>
+          </div>
+        )}
         <div className="segmented" role="tablist">
           <button type="button" role="tab" aria-selected={mode === "signin"} onClick={() => show("signin")}>
             {t("auth.signIn")}

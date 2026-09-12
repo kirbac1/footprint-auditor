@@ -718,3 +718,19 @@ button.small {
   background: var(--accent-soft);
   border-radius: var(--radius);
 }
+
+/* The shared account on a demo instance. */
+.callout.demo-account {
+  background: var(--accent-soft);
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+.callout.demo-account p {
+  margin: 0.4rem 0 0.6rem;
+}
+.callout.demo-account .tech {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+}

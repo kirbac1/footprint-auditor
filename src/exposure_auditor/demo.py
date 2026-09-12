@@ -8,6 +8,7 @@ so, and Settings refuses demo mode in prod.
 """
 
 import json
+import logging
 import re
 import unicodedata
 from types import SimpleNamespace
@@ -16,6 +17,8 @@ from .agent.matching import age_fits, fold, shows
 from .agent.scope import ScopedIdentifier
 from .identifiers import CONTEXT_KINDS
 from .tools.search import SearchResult
+
+log = logging.getLogger(__name__)
 
 _ID_LINE = re.compile(r"^- id=(\S+) kind=(\S+) value=(.+)$", re.MULTILINE)
 _PREFERENCE = ("name", "email", "username", "phone")
@@ -164,3 +167,53 @@ class DemoLLM:
                 "about someone else with the same name."
             ),
         )
+
+
+# A public demo instance signs everyone in as the same fictional person, so
+# nobody types their own details into a server that answers with synthetic
+# findings. Registration is refused while demo mode is on.
+DEMO_EMAIL = "demo@example.com"
+DEMO_PASSWORD = "footprint-demo-2026"  # noqa: S105 - published on the sign-in page, by design
+DEMO_NAME = "Maija Meikäläinen"
+DEMO_CITY = "Helsinki"
+DEMO_BIRTH_YEAR = "1990"
+
+
+async def seed_demo_account(sessionmaker, cipher) -> None:
+    """Create the shared demo account if it isn't there, ready to scan.
+
+    The email is 'verified' outright: there is no mailbox to send a code to,
+    and the ownership gate would otherwise make the demo unusable. Everything
+    it can find is synthetic, so there is nothing to protect.
+    """
+    from sqlalchemy import select
+
+    from .identifiers import normalize
+    from .models import Identifier, User
+    from .security import hash_password
+
+    async with sessionmaker() as session:
+        index = cipher.blind_index("user-email", DEMO_EMAIL)
+        if await session.scalar(select(User.id).where(User.email_index == index)) is not None:
+            return
+        user = User(email_index=index, email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD))
+        session.add(user)
+        await session.flush()
+        for kind, value, status in (
+            ("email", DEMO_EMAIL, "verified"),
+            ("name", DEMO_NAME, "attested"),
+            ("city", DEMO_CITY, "attested"),
+            ("birth_year", DEMO_BIRTH_YEAR, "attested"),
+        ):
+            normalized = normalize(kind, value)
+            session.add(
+                Identifier(
+                    user_id=user.id,
+                    kind=kind,
+                    value=normalized,
+                    value_index=cipher.blind_index(f"identifier-{kind}", normalized),
+                    status=status,
+                )
+            )
+        await session.commit()
+        log.warning("demo account seeded: %s", DEMO_EMAIL)

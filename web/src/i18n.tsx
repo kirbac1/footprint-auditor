@@ -17,6 +17,10 @@ const en = {
   "auth.fact1": "It only searches for details you have proven, or confirmed, are yours.",
   "auth.fact2": "It never deletes anything or sends requests on your behalf. You stay in control of every step.",
   "auth.fact3": "Your personal details are stored encrypted, and you can erase your account at any time.",
+  "demo.title": "This is a demo.",
+  "demo.body":
+    "Everything here runs for real \u2014 the same agent, the same guards, the same checks \u2014 but the model is scripted and the search results are invented, so no real page is ever found. Try it as the demo person below, or create an account: your email is stored encrypted, nothing is sent to you without asking, and you can erase the account from the Account tab at any time.",
+  "demo.fill": "Sign in as the demo person",
   "auth.signIn": "Sign in",
   "auth.createAccount": "Create account",
   "auth.email": "Email",
@@ -255,6 +259,10 @@ const fi: Record<MessageKey, string> = {
   "auth.fact1": "Se etsii vain tietoja, jotka olet todistanut tai vahvistanut omiksesi.",
   "auth.fact2": "Se ei koskaan poista mitään eikä lähetä pyyntöjä puolestasi. Päätät itse jokaisesta vaiheesta.",
   "auth.fact3": "Henkilötietosi tallennetaan salattuina, ja voit poistaa tilisi milloin tahansa.",
+  "demo.title": "T\u00e4m\u00e4 on demo.",
+  "demo.body":
+    "Kaikki toimii oikeasti \u2014 sama agentti, samat vartijat, samat tarkistukset \u2014 mutta malli on k\u00e4sikirjoitettu ja hakutulokset keksittyj\u00e4, joten yht\u00e4k\u00e4\u00e4n oikeaa sivua ei l\u00f6ydet\u00e4. Kokeile demohenkil\u00f6n\u00e4 tai luo tili: s\u00e4hk\u00f6postisi tallennetaan salattuna, sinulle ei l\u00e4hetet\u00e4 mit\u00e4\u00e4n kysym\u00e4tt\u00e4, ja voit poistaa tilin milloin tahansa Tili-v\u00e4lilehdelt\u00e4.",
+  "demo.fill": "Kirjaudu demohenkil\u00f6n\u00e4",
   "auth.signIn": "Kirjaudu",
   "auth.createAccount": "Luo tili",
   "auth.email": "Sähköposti",

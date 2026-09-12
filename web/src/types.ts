@@ -4,6 +4,7 @@ export type Kind = IdentityKind | ContextKind | "image";
 
 export interface Meta {
   demo_scans: boolean;
+  demo_account: { email: string; password: string } | null;
   scans_available: boolean;
   reverse_image_available: boolean;
   breach_check_available: boolean;

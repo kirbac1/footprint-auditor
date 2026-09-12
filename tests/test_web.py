@@ -1,8 +1,9 @@
 import httpx2
 import pytest
-from conftest import CapturingSender, FakeHibp, add_name, add_verified_email, login
+from conftest import CapturingSender, FakeHibp
 from fastapi.testclient import TestClient
 
+from exposure_auditor import demo
 from exposure_auditor.config import Settings
 from exposure_auditor.main import SPA_CSP, create_app
 
@@ -39,16 +40,28 @@ def test_spa_served_with_strict_csp(settings, tmp_path):
 
 
 def test_demo_mode_runs_the_real_pipeline(settings):
+    """A public demo signs everyone in as the same fictional person: nobody
+    types their own details into a server that answers with fiction."""
     sender = CapturingSender()
     http = httpx2.AsyncClient(transport=httpx2.MockTransport(FakeHibp()))
     app = create_app(settings.model_copy(update={"demo_scans": True}), sender=sender, http=http)
     with TestClient(app) as client:
-        ctx = type("Ctx", (), {"client": client, "sender": sender})
-        headers = login(client)
-        assert client.get("/meta").json()["demo_scans"] is True
-        add_verified_email(ctx, headers)
-        add_name(ctx, headers)
-        client.post("/identifiers", json={"kind": "city", "value": "Helsinki", "attest": True}, headers=headers)
+        meta = client.get("/meta").json()
+        assert meta["demo_scans"] is True
+        assert meta["demo_account"] == {"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD}
+
+        # Anyone may still register; the seeded account is the way to try it
+        # without handing over an address.
+        assert client.post(
+            "/auth/register", json={"email": "me@example.com", "password": "correct-horse-battery"}
+        ).status_code == 202
+        token = client.post(
+            "/auth/token", data={"username": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD}
+        ).json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        assert {i["kind"] for i in client.get("/identifiers", headers=headers).json()} == {
+            "email", "name", "city", "birth_year"
+        }
 
         scan_id = client.post("/scan", headers=headers).json()["scan_id"]
         scan = client.get(f"/scan/{scan_id}", headers=headers).json()

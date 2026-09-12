@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from .. import demo
 from ..deps import get_services
 from ..services import Services
 from ..tools.profile_proof import PLATFORMS
@@ -14,6 +15,9 @@ async def meta(services: Services = Depends(get_services)) -> dict:
     s = services.settings
     return {
         "demo_scans": s.demo_scans,
+        # A demo instance publishes its shared account: nobody should type
+        # their own details into a server that answers with fiction.
+        "demo_account": {"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD} if s.demo_scans else None,
         "scans_available": services.llm is not None and services.search is not None,
         "reverse_image_available": services.reverse_image is not None,
         "breach_check_available": s.hibp_api_key is not None,

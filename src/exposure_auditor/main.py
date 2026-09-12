@@ -98,6 +98,10 @@ async def service_context(
         llm_client = make_llm(settings)
 
     sessionmaker = make_sessionmaker(engine)
+    if settings.demo_scans:
+        from .demo import seed_demo_account
+
+        await seed_demo_account(sessionmaker, cipher)
     services = Services(
         settings=settings,
         cipher=cipher,
