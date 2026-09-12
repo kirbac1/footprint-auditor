@@ -139,6 +139,11 @@ query once and making six unsupported claims -- all refused by the guards, none
 of which depend on which model is driving. The table is in
 [`evals/README.md`](evals/README.md).
 
+[`docs/design.md`](docs/design.md) explains the rest: why these models, what is
+swappable, how it compares to DeleteMe and the people-search sites, what it
+would take to run it on AWS with Bedrock, and whether it can be put online for
+free (mostly yes, except the model).
+
 [`docs/guardrails.md`](docs/guardrails.md) is the whole set as one contract:
 every rule, the line that enforces it, the test or eval case that proves it,
 and the ones that are still only structural.
