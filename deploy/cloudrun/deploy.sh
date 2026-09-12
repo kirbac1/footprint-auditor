@@ -21,7 +21,7 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 for name in EA_JWT_SECRET EA_FIELD_ENCRYPTION_KEY EA_BLIND_INDEX_KEY; do
   if ! gcloud secrets describe "$name" >/dev/null 2>&1; then
     case "$name" in
-      EA_FIELD_ENCRYPTION_KEY) value="$(python3 -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')" ;;
+      EA_FIELD_ENCRYPTION_KEY) value="$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" ;;
       *) value="$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')" ;;
     esac
     printf '%s' "$value" | gcloud secrets create "$name" --data-file=- >/dev/null
