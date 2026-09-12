@@ -30,4 +30,8 @@ USER app
 EXPOSE 8000
 # `serve` applies migrations, then starts the API. The worker container runs
 # the same image with `exposure-auditor worker`.
-CMD ["/app/.venv/bin/exposure-auditor", "serve", "--host", "0.0.0.0", "--port", "8000"]
+#
+# Shell form so $PORT is honoured: Cloud Run and similar hosts assign the port
+# and expect the container to listen on it. Compose and ECS set nothing, and
+# get 8000.
+CMD exec /app/.venv/bin/exposure-auditor serve --host 0.0.0.0 --port "${PORT:-8000}"

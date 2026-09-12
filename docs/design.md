@@ -240,20 +240,33 @@ serving other people's traffic through them.
    (an 8B answers faster and worse — the eval will tell you exactly how much
    worse), Brave's free tier, and a cap on sign-ups.
 
-**Option 3 is what this repository ships.** [`deploy/huggingface/`](../deploy/huggingface/)
-has the Space card, the variables to set, and a push script:
+**Option 3 is what this repository ships**, on Cloud Run:
 
 ```bash
-./deploy/huggingface/push.sh <your-hf-username>/footprint-auditor
+./deploy/cloudrun/deploy.sh <gcp-project-id>
 ```
 
-A Space builds the same Dockerfile the compose stack uses, on free CPU
-hardware. Demo mode seeds one shared fictional person so a visitor can scan
-without handing over an address; registration stays open for anyone who wants
-to leave one, and because a Space has no mailbox, the verification code is
-returned to the page instead of a log — a demo-only behaviour, with a test
-that it never happens anywhere else. Only `/tmp` is writable and it is wiped on
-restart, which is the right trade here: no visitor's account outlives the day. Before letting strangers scan themselves for real, the blockers are not
+Cloud Run's free allowances are perpetual (2M requests, 360k vCPU-seconds,
+180k GiB-seconds a month), it runs the same container as everything else, and
+it scales to zero, so an idle demo costs nothing. A billing account is
+required; nothing is charged inside the allowances, and a budget alert is
+still worth setting. [`deploy/cloudrun/`](../deploy/cloudrun/) has the script
+and the trade-offs: cold starts, one instance, and a SQLite file in the
+instance's `/tmp` that disappears with it — which is the point for a demo,
+since no visitor's account outlives the day.
+
+[`deploy/huggingface/`](../deploy/huggingface/) does the same for a Hugging
+Face Space, and is kept for anyone who has PRO: as of September 2026 their
+free CPU tier no longer appears to cover Docker Spaces, only static ones.
+Check their pricing page before relying on it.
+
+Demo mode seeds one shared fictional person so a visitor can scan without
+handing over an address; registration stays open for anyone who wants to leave
+one, and because neither host has a mailbox, the verification code is returned
+to the page instead of a log — a demo-only behaviour, with a test that it
+never happens anywhere else.
+
+Before letting strangers scan themselves for real, the blockers are not
 technical: a privacy policy, a retention schedule, data processing agreements
 with every provider, and plausibly a DPIA, because profiling identified people
 is on the Article 35 list. Those are the real cost of "online", and no free
