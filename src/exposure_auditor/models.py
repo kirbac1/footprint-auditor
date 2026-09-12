@@ -88,6 +88,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(EncryptedText)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # A password reset in progress: the code itself is never stored, only a
+    # keyed hash of it, the same way identifier verification works.
+    reset_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reset_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    reset_attempts: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Identifier(Base):

@@ -15,19 +15,34 @@ from exposure_auditor.openai_compat import ModelUnavailable, OpenAICompatLLM, Te
 
 
 class _FakeHttp:
-    """Records the request and replies with a canned chat completion."""
+    """Records the request and replies with a canned chat completion.
 
-    def __init__(self, body: dict | None = None, status_code: int = 200, raises: Exception | None = None) -> None:
+    `fail_times` makes the first N calls fail, so a retry can be told apart
+    from a call that simply worked.
+    """
+
+    def __init__(
+        self,
+        body: dict | None = None,
+        status_code: int = 200,
+        raises: Exception | None = None,
+        fail_times: int = 10**6,
+    ) -> None:
         self.body = body or _completion()
         self.status_code = status_code
         self.raises = raises
+        self.fail_times = fail_times
+        self.calls = 0
         self.sent: dict = {}
 
     async def post(self, url, json=None, headers=None):
-        if self.raises:
+        self.calls += 1
+        failing = self.calls <= self.fail_times
+        if self.raises and failing:
             raise self.raises
         self.sent = {"url": url, "json": json, "headers": headers}
-        return SimpleNamespace(status_code=self.status_code, json=lambda: self.body)
+        code = self.status_code if failing else 200
+        return SimpleNamespace(status_code=code, json=lambda: self.body)
 
 
 def _completion(content="", tool_calls=None, finish_reason="tool_calls", usage=None):
@@ -44,8 +59,10 @@ def _call(name="search_web", arguments='{"query":"Maija Meikalainen Helsinki","s
     return [{"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments}}]
 
 
-def _llm(http):
-    return OpenAICompatLLM(http, "http://127.0.0.1:11434/v1", None, "ollama")
+def _llm(http, retries=(0.0, 0.0)):
+    llm = OpenAICompatLLM(http, "http://127.0.0.1:11434/v1", None, "ollama")
+    llm.RETRY_DELAYS = retries  # no real waiting in tests
+    return llm
 
 
 async def test_tool_calls_become_the_blocks_the_agent_expects():
@@ -138,6 +155,43 @@ async def test_unparseable_tool_arguments_reach_the_guard_not_a_crash():
 async def test_provider_trouble_is_an_operator_error(http):
     with pytest.raises(ModelUnavailable):
         await _llm(http).messages.create(model="qwen3", max_tokens=100, messages=[])
+
+
+async def test_a_dropped_connection_is_retried_rather_than_ending_the_scan():
+    """A scan is many calls over many minutes; one blip threw all of it away."""
+    http = _FakeHttp(raises=RuntimeError(), fail_times=1)
+
+    response = await _llm(http).messages.create(model="qwen3", max_tokens=100, messages=[])
+
+    assert http.calls == 2
+    assert response.stop_reason == "tool_use"
+
+
+async def test_a_busy_provider_is_retried():
+    http = _FakeHttp(status_code=503, fail_times=2)
+
+    await _llm(http).messages.create(model="qwen3", max_tokens=100, messages=[])
+
+    assert http.calls == 3
+
+
+async def test_a_rejected_request_is_not_retried():
+    # 400 means we sent something wrong; sending it again just wastes the scan.
+    http = _FakeHttp(status_code=400)
+
+    with pytest.raises(ModelUnavailable, match="400"):
+        await _llm(http).messages.create(model="qwen3", max_tokens=100, messages=[])
+
+    assert http.calls == 1
+
+
+async def test_retries_are_finite():
+    http = _FakeHttp(raises=RuntimeError())
+
+    with pytest.raises(ModelUnavailable):
+        await _llm(http).messages.create(model="qwen3", max_tokens=100, messages=[])
+
+    assert http.calls == 3  # the call, then two retries
 
 
 def test_a_local_model_is_not_billed_per_token(settings):

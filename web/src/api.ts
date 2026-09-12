@@ -116,6 +116,9 @@ export const api = {
   meta: () => request<Meta>("GET", "/meta"),
 
   register: (email: string, password: string) => request<unknown>("POST", "/auth/register", { email, password }),
+  requestPasswordReset: (email: string) => request<unknown>("POST", "/auth/reset/request", { email }),
+  confirmPasswordReset: (email: string, code: string, password: string) =>
+    request<void>("POST", "/auth/reset/confirm", { email, code, password }),
   async login(email: string, password: string): Promise<void> {
     const form = new URLSearchParams({ username: email, password });
     const res = await request<{ access_token: string }>("POST", "/auth/token", undefined, form);

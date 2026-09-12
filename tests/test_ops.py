@@ -8,6 +8,7 @@ from conftest import add_name, add_verified_email, login, reply, text, tool_use
 
 from exposure_auditor.config import Settings
 from exposure_auditor.llm import FALLBACK_BETA, LLM, make_llm
+from exposure_auditor.openai_compat import ModelUnavailable
 from exposure_auditor.tools.search import SearchResult
 from exposure_auditor.worker import run_worker
 
@@ -79,7 +80,9 @@ def test_the_trace_is_written_while_the_scan_is_still_running(ctx):
     ctx.search.results = [SearchResult("https://www.spokeo.com/Maija/p1", "Maija Meikäläinen", "Helsinki")]
     ctx.llm.script += [
         reply("tool_use", tool_use("s1", "search_web", {"query": "Maija Meikäläinen", "site": ""})),
-        reply("end_turn", text("Done.")),
+        # Stopping without recording earns one nudge, then the scan ends.
+        reply("end_turn", text("Nothing to record.")),
+        reply("end_turn", text("Nothing in those results was about them.")),
     ]
 
     seen: list[int] = []
@@ -99,13 +102,13 @@ def test_the_trace_is_written_while_the_scan_is_still_running(ctx):
     assert seen == [1], "the first model call should be visible before the scan ends"
     scan_id = r.json()["scan_id"]
     trace = ctx.client.get(f"/scan/{scan_id}/trace", headers=headers).json()
-    assert [e["kind"] for e in trace] == ["model_call", "tool_call", "model_call"]
-    assert [e["seq"] for e in trace] == [0, 1, 2]
+    assert [e["kind"] for e in trace] == ["model_call", "tool_call", "model_call", "model_call"]
+    assert [e["seq"] for e in trace] == [0, 1, 2, 3]
 
     # Following a scan is one request per tick: two would spend the rate limit
     # twice as fast as the page polls.
     with_trace = ctx.client.get(f"/scan/{scan_id}?trace=true", headers=headers).json()
-    assert [e["seq"] for e in with_trace["trace"]] == [0, 1, 2]
+    assert [e["seq"] for e in with_trace["trace"]] == [0, 1, 2, 3]
     assert ctx.client.get(f"/scan/{scan_id}", headers=headers).json()["trace"] is None
 
 
@@ -208,3 +211,84 @@ def test_provider_selection(monkeypatch):
     assert make_llm(Settings(**base, llm_provider="foundry")) is None  # no resource
     llm = make_llm(Settings(**base, llm_provider="anthropic", anthropic_api_key="sk-test"))
     assert llm is not None and llm.provider == "anthropic"
+
+
+def test_an_operator_can_set_a_password_without_a_reset_link(ctx, settings, monkeypatch, capsys):
+    """Break-glass at the machine: no email, no token. It must still use the
+    same email normalization as login, or it silently finds no account."""
+    from argparse import Namespace
+
+    import exposure_auditor.cli as cli
+
+    login(ctx.client, email="me@example.com", password="correct-horse-battery")
+    typed = iter(["a-much-longer-password", "a-much-longer-password"])
+    monkeypatch.setattr("getpass.getpass", lambda *_: next(typed))
+    monkeypatch.setattr("exposure_auditor.config.get_settings", lambda: settings)
+
+    with pytest.raises(SystemExit) as exit_code:
+        cli._set_password(Namespace(email="ME@Example.com  "))  # mixed case and spaces, as typed
+    assert exit_code.value.code == 0
+    assert "Password set" in capsys.readouterr().out
+
+    # The old password is gone and the new one works.
+    assert ctx.client.post(
+        "/auth/token", data={"username": "me@example.com", "password": "correct-horse-battery"}
+    ).status_code == 401
+    assert ctx.client.post(
+        "/auth/token", data={"username": "me@example.com", "password": "a-much-longer-password"}
+    ).status_code == 200
+
+
+def test_a_short_password_is_refused_and_changes_nothing(ctx, settings, monkeypatch):
+    from argparse import Namespace
+
+    import exposure_auditor.cli as cli
+
+    login(ctx.client, email="me@example.com", password="correct-horse-battery")
+    monkeypatch.setattr("getpass.getpass", lambda *_: "short")
+    monkeypatch.setattr("exposure_auditor.config.get_settings", lambda: settings)
+
+    with pytest.raises(SystemExit) as exit_code:
+        cli._set_password(Namespace(email="me@example.com"))
+    assert exit_code.value.code == 1
+    assert ctx.client.post(
+        "/auth/token", data={"username": "me@example.com", "password": "correct-horse-battery"}
+    ).status_code == 200
+
+
+def test_a_scan_that_loses_the_model_keeps_what_it_already_found(ctx):
+    """A long scan on a slow model is minutes of work. Losing the connection
+    on turn fourteen used to throw away the thirteen turns before it."""
+    headers = login(ctx.client)
+    add_verified_email(ctx, headers)
+    name = add_name(ctx, headers)
+    ctx.search.results = [
+        SearchResult("https://www.spokeo.com/Maija-Meikalainen/p1", "Maija Meikäläinen, Helsinki", "Age 30s")
+    ]
+
+    class DiesAfterRecording:
+        def __init__(self):
+            self.messages = self
+            self.calls = 0
+
+        async def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return reply("tool_use", tool_use("s1", "search_web", {"query": "Maija Meikäläinen", "site": ""}))
+            if self.calls == 2:
+                return reply("tool_use", tool_use("r1", "record_finding", {
+                    "result_id": "r1", "category": "people_search", "matched_identifier_ids": [name["id"]],
+                    "conflicting_identifier_ids": [], "confidence": "medium", "rationale": "name and city",
+                }))
+            raise ModelUnavailable("ollama: RuntimeError")
+
+    ctx.client.app.state.services.llm = DiesAfterRecording()
+    scan_id = ctx.client.post("/scan", headers=headers).json()["scan_id"]
+    scan = ctx.client.get(f"/scan/{scan_id}", headers=headers).json()
+
+    assert scan["status"] == "failed"
+    assert "lost contact" in scan["error"]
+    assert [f["url"] for f in scan["findings"]] == ["https://www.spokeo.com/Maija-Meikalainen/p1"]
+    # And the trace of the turns that did happen is still there.
+    trace = ctx.client.get(f"/scan/{scan_id}/trace", headers=headers).json()
+    assert [e["status"] for e in trace][-1] == "error"

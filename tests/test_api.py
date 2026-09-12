@@ -165,7 +165,7 @@ def test_model_api_error_fails_scan_with_operator_message(ctx):
     scan_id = ctx.client.post("/scan", headers=headers).json()["scan_id"]
     scan = ctx.client.get(f"/scan/{scan_id}", headers=headers).json()
     assert scan["status"] == "failed"
-    assert "could not be reached" in scan["error"]
+    assert "lost contact with the model" in scan["error"]
 
 
 def test_one_scan_at_a_time_and_daily_quota(ctx, settings):

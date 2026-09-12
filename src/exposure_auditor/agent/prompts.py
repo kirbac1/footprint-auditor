@@ -53,19 +53,32 @@ namesakes you set aside, and anything you could not check (for example, a \
 tool that was not configured)."""
 
 _EXPOSURE = """\
-Task: discovery. Find where the account holder's data is published: \
-people-search and data-broker listings, directories, public records \
-aggregators, paste or leak sites, and old profiles.
+Task: discovery. Find where the account holder's data is published: their own \
+public profiles and personal site, people-search and data-broker listings, \
+directories, public-records aggregators, paste or leak sites, and old accounts.
 
-Work through each identifier. Start with a plain search for it, then run \
-site-restricted searches against the data brokers below using the full name, \
-and search emails, phones and usernames on their own, since those are the \
-strongest links between a listing and the person. When context details are \
-given, also search the name together with one of them (for example the name \
-and the city); that brings the account holder's own listings forward. Two or \
-three searches per identifier is usually enough; do not repeat a query.
+The search budget is finite, so work in this order:
 
-Data brokers in the registry (id | name | domain):
+1. Plain searches, one identifier at a time: the full name on its own, then \
+each email, phone number and username on its own. This is how the open web is \
+indexed, and it is where a personal site, a professional profile or an old \
+account will surface.
+2. The name together with a context detail (the city, the workplace). That \
+brings the account holder's own pages forward and pushes people who merely \
+share the name back.
+3. Their own presence on the platforms and sites they are likely to use. A \
+profile the account holder runs themselves is still part of their footprint: \
+record it as social_profile. So is their own website.
+4. Only then site-restricted searches against data brokers, and only brokers \
+that are plausible for this person. Each broker below is listed with the \
+jurisdictions it covers. A US-only people-search site is unlikely to hold \
+someone whose city, phone and language are European; spending the budget \
+there finds other people with the same name instead.
+
+Do not repeat a query, and if a query is rejected, rewrite it rather than \
+trying the same shape again.
+
+Data brokers in the registry (id | name | domain | jurisdictions):
 {brokers}"""
 
 _IMPERSONATION = """\
@@ -89,9 +102,16 @@ details when there are any. Flagging a stranger's real account as fake would \
 harm them, so leave the call to the account holder whenever it is unclear."""
 
 
-def system_prompt(mode: str, brokers: BrokerRegistry) -> str:
+def system_prompt(mode: str, brokers: BrokerRegistry, language: str = "en") -> str:
     if mode == "exposure":
-        listing = "\n".join(f"{b.id} | {b.name} | {', '.join(b.domains)}" for b in brokers.all())
+        # Nearest first: a Finnish account holder's listings are not on a
+        # US-only people-search site, and the model reads a list in order.
+        home = "FI" if language == "fi" else "US"
+        ordered = sorted(brokers.all(), key=lambda b: (home not in b.jurisdictions, b.id))
+        listing = "\n".join(
+            f"{b.id} | {b.name} | {', '.join(b.domains)} | {'/'.join(b.jurisdictions) or 'unknown'}"
+            for b in ordered
+        )
         task = _EXPOSURE.format(brokers=listing)
     elif mode == "impersonation":
         task = _IMPERSONATION

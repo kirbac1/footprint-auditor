@@ -71,3 +71,35 @@ def test_scan_language_reaches_the_agent(ctx):
 def test_unknown_language_is_rejected(ctx):
     headers = login(ctx.client)
     assert ctx.client.post("/remediation-plan?language=sv", headers=headers).status_code == 422
+
+
+def test_a_finnish_scan_is_offered_finnish_brokers_first():
+    """Ten of twelve brokers are US-only. A Tampere scan that works through
+    them in registry order spends its budget finding other people."""
+    from exposure_auditor.agent.prompts import system_prompt
+    from exposure_auditor.tools.brokers import BrokerRegistry
+
+    brokers = BrokerRegistry.load()
+    def listed(prompt: str) -> list[str]:
+        # The header line has the same shape as a row; it isn't a broker.
+        rows = [ln for ln in prompt.splitlines() if ln.count(" | ") == 3 and not ln.startswith("Data brokers")]
+        return [ln.split(" | ")[0] for ln in rows]
+
+    assert listed(system_prompt("exposure", brokers, "fi"))[0] == "fonecta"
+    assert listed(system_prompt("exposure", brokers, "en"))[0] != "fonecta"
+    # Nothing is hidden either way: the model chooses, the prompt only orders.
+    assert set(listed(system_prompt("exposure", brokers, "fi"))) == set(listed(system_prompt("exposure", brokers, "en")))
+
+
+def test_discovery_looks_for_the_account_holders_own_pages():
+    """A personal site and the profiles someone runs themselves are part of
+    their footprint; the first version searched only brokers."""
+    from exposure_auditor.agent.prompts import system_prompt
+    from exposure_auditor.tools.brokers import BrokerRegistry
+
+    prompt = system_prompt("exposure", BrokerRegistry.load(), "en")
+
+    assert "personal site" in prompt
+    assert "social_profile" in prompt
+    # Plain searches come before broker searches, not after.
+    assert prompt.index("Plain searches") < prompt.index("site-restricted")

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import tracing
 from .agent.matching import normalize_url
-from .agent.orchestrator import AgentConfig, ScanAgent, TraceEvent
+from .agent.orchestrator import AgentConfig, RecordedFinding, ScanAgent, TraceEvent
 from .agent.scope import ScopedIdentifier
 from .config import Settings
 from .crypto import FieldCipher
@@ -158,6 +158,24 @@ async def claim(session: AsyncSession, scan_id: str) -> bool:
     return result.rowcount == 1
 
 
+def _save_findings(session: AsyncSession, scan: Scan, findings: Sequence[RecordedFinding]) -> None:
+    for f in findings:
+        session.add(
+            Finding(
+                scan_id=scan.id,
+                user_id=scan.user_id,
+                category=f.category,
+                url=f.url,
+                title=f.title,
+                broker_id=f.broker_id,
+                matched_identifier_ids=f.matched_identifier_ids,
+                confidence=f.confidence,
+                rationale=f.rationale,
+                match_status=f.match_status,
+            )
+        )
+
+
 async def run_scan(services: Services, scan_id: str) -> None:
     async with services.sessionmaker() as session:
         if not await claim(session, scan_id):
@@ -181,32 +199,23 @@ async def run_scan(services: Services, scan_id: str) -> None:
         except ScopeUnavailable as exc:
             scan.status, scan.error = "failed", str(exc)
         except (anthropic.APIError, ModelUnavailable) as exc:
-            # Expired credentials, no model access in this region, network:
-            # an operator problem, not something the user can retry away.
+            # Expired credentials, no model access in this region, or a
+            # connection that died after the provider was retried.
             log.error("scan %s: model call failed: %s", scan_id, type(exc).__name__)
             scan.status = "failed"
-            scan.error = "The scan model could not be reached. This is a service configuration problem."
+            scan.error = (
+                "The scan lost contact with the model and stopped. Anything it had already found is "
+                "kept below. Try again; if it keeps happening, check the model settings."
+            )
+            if agent is not None:
+                _save_findings(session, scan, agent.recorded_so_far())
         except Exception as exc:
             # Type only: exception messages from providers can echo queries,
             # and queries contain the user's identifiers.
             log.error("scan %s failed: %s", scan_id, type(exc).__name__)
             scan.status, scan.error = "failed", "The scan failed unexpectedly. Try again later."
         else:
-            for f in outcome.findings:
-                session.add(
-                    Finding(
-                        scan_id=scan.id,
-                        user_id=scan.user_id,
-                        category=f.category,
-                        url=f.url,
-                        title=f.title,
-                        broker_id=f.broker_id,
-                        matched_identifier_ids=f.matched_identifier_ids,
-                        confidence=f.confidence,
-                        rationale=f.rationale,
-                        match_status=f.match_status,
-                    )
-                )
+            _save_findings(session, scan, outcome.findings)
             scan.status = "refused" if outcome.status == "refused" else "completed"
             scan.summary = outcome.summary or None
             scan.namesakes_excluded = outcome.namesakes_excluded

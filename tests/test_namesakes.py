@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 from conftest import FakeSearch, ScriptedLLM, add_name, add_verified_email, login, reply, text, tool_use
 
-from exposure_auditor.agent.matching import age_fits, fold, normalize_url, shows
+from exposure_auditor.agent.matching import STRONG_KINDS, age_fits, fold, normalize_url, shows
 from exposure_auditor.agent.orchestrator import AgentConfig, ScanAgent
 from exposure_auditor.agent.scope import ScopedIdentifier, ScopeGuard, ToolError
 from exposure_auditor.tools.brokers import BrokerRegistry
@@ -259,3 +259,35 @@ def test_finding_verdicts_are_tenant_isolated(ctx):
     bob = login(ctx.client, "bob@example.com")
     assert ctx.client.post(f"/findings/{finding_id}/confirm", headers=bob).status_code == 404
     assert ctx.client.post(f"/findings/{finding_id}/not-me", headers=bob).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Kirbac, Ugur — Trepo, Tampereen yliopisto",   # citation order
+        "Ugur A. Kirbac | LinkedIn",                    # a middle initial
+        "Kirbač, Uğur: diplomityö",                     # spelled as it really is
+        "ugurkirbac.fi - etusivu",                      # run together in a domain
+    ],
+)
+def test_a_name_is_visible_however_the_page_writes_it(text):
+    """Requiring one contiguous string hid a person's own website, their
+    thesis and their LinkedIn behind a punctuation mark."""
+    assert shows(ScopedIdentifier("n1", "name", "Ugur Kirbac"), text)
+
+
+@pytest.mark.parametrize("text", ["Ugur Eroglu, 38 - Clifton, NJ", "Michael Kirbac, 71", "Maija Meikalainen"])
+def test_someone_who_shares_half_a_name_is_not_a_match(text):
+    assert not shows(ScopedIdentifier("n1", "name", "Ugur Kirbac"), text)
+
+
+def test_a_directory_page_listing_both_halves_stays_for_review():
+    """The cost of matching the parts: a people-search index page that lists a
+    Michael Kirbac and a Ugur Arat contains both halves of the name. It counts
+    as the name being visible -- and a name alone never goes into the plan, so
+    the account holder is the one who decides."""
+    page = "Michael Kirbac, 71 San Bernardino, CA · Ugur Arat, 47 · Ergun Gursul"
+    ident = ScopedIdentifier("n1", "name", "Ugur Kirbac")
+
+    assert shows(ident, page)
+    assert STRONG_KINDS.isdisjoint({ident.kind})  # a name on its own is never strong

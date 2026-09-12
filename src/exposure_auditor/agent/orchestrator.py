@@ -42,6 +42,17 @@ CATEGORIES = [
 ]
 CONFIDENCE = ["high", "medium", "low"]
 
+# Asked to stop without recording anything, a model will sometimes write a
+# summary describing findings it never filed. Nothing reaches the account
+# holder except through record_finding, so the loop asks once more rather than
+# trusting the prose.
+NUDGE = (
+    "You have not called record_finding in this scan, and your searches did return results. "
+    "Nothing reaches the account holder except through that tool: a summary describing findings "
+    "does not create them. Record each result that is about them or is a namesake now, one call "
+    "per result. If none of the results were about either, reply with one line saying so."
+)
+
 SEARCH_TOOL = {
     "name": "search_web",
     "description": (
@@ -205,8 +216,15 @@ class ScanAgent:
         self._searches = 0
         self._namesakes = 0
         self._spend_usd = 0.0
+        self._record_calls = 0
+        self._nudged = False
         # Public so the caller can keep the trace of a scan that failed midway.
         self.events: list[TraceEvent] = []
+
+    def recorded_so_far(self) -> list[RecordedFinding]:
+        """What the scan had found when something ended it early. Minutes of
+        searching are worth keeping even when the run didn't finish."""
+        return list(self._findings.values())
 
     def _tool_defs(self) -> list[dict]:
         tools = [SEARCH_TOOL, RECORD_TOOL]
@@ -261,7 +279,7 @@ class ScanAgent:
         return response
 
     async def run(self) -> AgentOutcome:
-        system = system_prompt(self._mode, self._cfg.brokers)
+        system = system_prompt(self._mode, self._cfg.brokers, self._language)
         tools = self._tool_defs()
         messages: list[dict] = [
             {"role": "user", "content": task_message(self._identifiers, self._unavailable(), self._language)}
@@ -295,6 +313,10 @@ class ScanAgent:
             tool_uses = [b for b in response.content if b.type == "tool_use"]
             if not tool_uses:
                 text = "\n".join(b.text for b in response.content if b.type == "text").strip()
+                if not self._record_calls and self._searches and not self._nudged:
+                    self._nudged = True
+                    messages.append({"role": "user", "content": NUDGE})
+                    continue
                 return self._outcome("completed", text)
             # All results go back in one user message; splitting them teaches
             # the model to stop making parallel calls.
@@ -365,6 +387,9 @@ class ScanAgent:
         return shows(ident, text)
 
     def _record(self, inp: dict) -> tuple[str, str]:
+        # Counted even when refused: the model tried, and was told why. Only a
+        # scan where it never tried at all is worth interrupting.
+        self._record_calls += 1
         result_id = str(inp.get("result_id", ""))
         result = self._results.get(result_id)
         if result is None:

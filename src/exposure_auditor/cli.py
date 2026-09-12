@@ -1,4 +1,4 @@
-"""exposure-auditor: serve, migrate, worker, check, stats (and eval, see evals/)."""
+"""exposure-auditor: serve, migrate, worker, check, stats, set-password (and eval)."""
 
 import argparse
 import asyncio
@@ -22,6 +22,11 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("stats", help="latency and cost across finished scans")
     sub.add_parser("check", help="verify credentials and config before a real scan")
 
+    password = sub.add_parser(
+        "set-password", help="set an account's password from the server (asks for it; never on the command line)"
+    )
+    password.add_argument("email", help="the account's email address")
+
     evals = sub.add_parser("eval", help="run the agent eval suite (see evals/README.md)")
     evals.add_argument("--provider", default="demo", help="demo (scripted), or bedrock, foundry, anthropic")
     evals.add_argument("--cases", default=None, help="path to the eval cases (default: evals/cases)")
@@ -34,9 +39,15 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     args = parser.parse_args(argv)
-    {"serve": _serve, "migrate": _migrate, "worker": _worker, "stats": _stats, "check": _check, "eval": _eval}[
-        args.cmd
-    ](args)
+    {
+        "serve": _serve,
+        "migrate": _migrate,
+        "worker": _worker,
+        "stats": _stats,
+        "check": _check,
+        "set-password": _set_password,
+        "eval": _eval,
+    }[args.cmd](args)
 
 
 def _serve(args: argparse.Namespace) -> None:
@@ -83,6 +94,56 @@ def _check(args: argparse.Namespace) -> None:
     checks = asyncio.run(run_checks(get_settings()))
     print(format_checks(checks))
     sys.exit(1 if any(c.blocks_a_scan for c in checks) else 0)
+
+
+def _set_password(args: argparse.Namespace) -> None:
+    """Break-glass for an operator at the machine: no email, no token, no link.
+
+    The password is read from the terminal, never from a shell argument, so it
+    stays out of the shell history and the process list. This is not the user
+    flow -- that has to prove control of a verified address -- and every use
+    is written to the audit log.
+    """
+    import getpass
+    import sys
+
+    from sqlalchemy import select
+
+    from .audit import record
+    from .config import get_settings
+    from .identifiers import InvalidIdentifier, normalize
+    from .main import service_context
+    from .models import User
+    from .security import hash_password
+
+    settings = get_settings()
+
+    async def go() -> str:
+        async with service_context(settings, llm=None, search=None) as services:
+            async with services.sessionmaker() as session:
+                try:
+                    # The same normalization the login path uses, or the blind
+                    # index won't match the row it wrote.
+                    address = normalize("email", args.email)
+                except InvalidIdentifier as exc:
+                    return f"Not an email address: {exc}"
+                index = services.cipher.blind_index("user-email", address)
+                user = (await session.scalars(select(User).where(User.email_index == index))).first()
+                if user is None:
+                    return f"No account for {args.email}."
+                new = getpass.getpass("New password (at least 12 characters): ")
+                if len(new) < 12:
+                    return "Password too short: at least 12 characters."
+                if new != getpass.getpass("Repeat it: "):
+                    return "Those didn't match; nothing changed."
+                user.password_hash = hash_password(new)
+                record(session, user.id, "password.set_by_operator", "user", user.id)
+                await session.commit()
+                return f"Password set for {args.email}. Existing sign-ins stay valid until their token expires."
+
+    message = asyncio.run(go())
+    print(message)
+    sys.exit(0 if message.startswith("Password set") else 1)
 
 
 def _percentile(values: list[float], pct: int) -> float:

@@ -11,6 +11,7 @@ Raw HTTP rather than the openai SDK: one endpoint, no streaming, one less
 dependency, and Ollama serves this shape natively.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -158,12 +159,40 @@ def _usage(raw: dict) -> Usage:
 class OpenAICompatLLM:
     """Exposes `.messages.create(...)`, like the Anthropic client does."""
 
+    # A scan is many calls over many minutes, so a single dropped connection
+    # would throw away everything found so far. Transport failures and the
+    # provider's own "busy" answers are retried; a 4xx is our own mistake and
+    # is not.
+    RETRY_DELAYS = (1.0, 4.0)
+    RETRY_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+
     def __init__(self, http: httpx2.AsyncClient, base_url: str, api_key: str | None, provider: str) -> None:
         self._http = http
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._key = api_key
         self.provider = provider
         self.messages = self
+
+    async def _post(self, payload: dict, headers: dict) -> Any:
+        for attempt in range(len(self.RETRY_DELAYS) + 1):
+            try:
+                r = await self._http.post(self._url, json=payload, headers=headers)
+            except Exception as exc:
+                # Keep the message: these are transport failures -- timeouts, a
+                # closed pool, a refused connection -- and the type alone sends
+                # you hunting. The API layer still logs only the type.
+                detail = f"{self.provider}: {type(exc).__name__}: {exc}"[:300]
+            else:
+                if r.status_code == 200:
+                    return r
+                detail = f"{self.provider} returned HTTP {r.status_code}"
+                if r.status_code not in self.RETRY_STATUSES:
+                    raise ModelUnavailable(detail)
+            if attempt == len(self.RETRY_DELAYS):
+                raise ModelUnavailable(detail)
+            log.warning("%s; retrying in %.0fs", detail, self.RETRY_DELAYS[attempt])
+            await asyncio.sleep(self.RETRY_DELAYS[attempt])
+        raise ModelUnavailable(f"{self.provider}: unreachable")  # pragma: no cover
 
     async def create(self, **kwargs: Any) -> Message:
         payload = {
@@ -176,12 +205,7 @@ class OpenAICompatLLM:
         # cache_control and output_config are Anthropic-only; dropping them
         # changes cost and reasoning depth, never the agent's guards.
         headers = {"Authorization": f"Bearer {self._key}"} if self._key else {}
-        try:
-            r = await self._http.post(self._url, json=payload, headers=headers)
-        except Exception as exc:
-            raise ModelUnavailable(f"{self.provider}: {type(exc).__name__}") from exc
-        if r.status_code != 200:
-            raise ModelUnavailable(f"{self.provider} returned HTTP {r.status_code}")
+        r = await self._post(payload, headers)
         body = r.json()
         choices = body.get("choices") or []
         if not choices:

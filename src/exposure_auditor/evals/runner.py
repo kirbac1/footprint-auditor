@@ -281,11 +281,19 @@ def run_cli(args: Any) -> None:
         return [await run_case(c, llm, model, settings, brokers, language) for c in cases]
 
     repeat = max(1, int(getattr(args, "repeat", 1) or 1))
-    runs: list[list[CaseResult]] = []
-    for i in range(repeat):
-        if repeat > 1:
-            print(f"\nrun {i + 1} of {repeat}")
-        runs.append(asyncio.run(run_all()))
+
+    async def run_repeatedly() -> list[list[CaseResult]]:
+        # One event loop for every run: the provider's HTTP client is built
+        # before the first one, and a client outlives its loop badly -- the
+        # second run would fail on a closed pool and look like model variance.
+        out = []
+        for i in range(repeat):
+            if repeat > 1:
+                print(f"\nrun {i + 1} of {repeat}", flush=True)
+            out.append(await run_all())
+        return out
+
+    runs = asyncio.run(run_repeatedly())
     summaries = [summarize(r) for r in runs]
     results = runs[-1]
     summary = summaries[-1]

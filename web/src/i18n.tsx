@@ -23,6 +23,15 @@ const en = {
   "auth.password": "Password",
   "auth.passwordHint": "At least 12 characters.",
   "auth.wait": "Please wait…",
+  "reset.forgot": "Forgot your password?",
+  "reset.intro":
+    "We'll send a 6-digit code to your account's email address. Your saved details stay encrypted; a reset changes only how you sign in.",
+  "reset.sendCode": "Send me a code",
+  "reset.sent": "If this email has an account, a code is on its way. It is valid for 10 minutes.",
+  "reset.code": "Code from the email",
+  "reset.newPassword": "New password",
+  "reset.setPassword": "Set new password",
+  "reset.backToSignIn": "Back to sign in",
   "auth.accountExists": "If this email already has an account, sign in with that account's password.",
 
   "tab.details": "Your details",
@@ -252,6 +261,15 @@ const fi: Record<MessageKey, string> = {
   "auth.password": "Salasana",
   "auth.passwordHint": "Vähintään 12 merkkiä.",
   "auth.wait": "Hetki…",
+  "reset.forgot": "Unohtuiko salasana?",
+  "reset.intro":
+    "Lähetämme 6-numeroisen koodin tilisi sähköpostiosoitteeseen. Tallennetut tietosi pysyvät salattuina; nollaus muuttaa vain kirjautumistavan.",
+  "reset.sendCode": "Lähetä koodi",
+  "reset.sent": "Jos tälle osoitteelle on tili, koodi on matkalla. Se on voimassa 10 minuuttia.",
+  "reset.code": "Koodi sähköpostista",
+  "reset.newPassword": "Uusi salasana",
+  "reset.setPassword": "Aseta uusi salasana",
+  "reset.backToSignIn": "Takaisin kirjautumiseen",
   "auth.accountExists": "Jos tällä sähköpostilla on jo tili, kirjaudu sen salasanalla.",
 
   "tab.details": "Omat tiedot",

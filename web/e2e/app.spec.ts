@@ -119,6 +119,30 @@ test("an earlier scan opens in the panel when you ask to see it", async ({ page 
   await expect(page.locator(".row.selected")).toHaveCount(1);
 });
 
+test("a forgotten password can be reset with a code", async ({ page }) => {
+  const email = `e2e-${Date.now()}@example.com`;
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill("correct-horse-battery");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("tab", { name: "Your details" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: "Forgot your password?" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByRole("button", { name: "Send me a code" }).click();
+  await expect(page.getByText(/a code is on its way/)).toBeVisible();
+
+  await page.getByLabel("Code from the email").fill(await codeFor(email));
+  await page.getByLabel("New password", { exact: true }).fill("a-brand-new-password");
+  await page.getByRole("button", { name: "Set new password" }).click();
+
+  // Straight into the app on the new password.
+  await expect(page.getByRole("tab", { name: "Your details" })).toBeVisible();
+});
+
 test("the interface switches to Finnish", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Vaihda kieli suomeksi" }).click();

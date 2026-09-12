@@ -13,6 +13,16 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=12, max_length=256)
 
 
+class ResetRequestIn(BaseModel):
+    email: str = Field(max_length=320)
+
+
+class ResetConfirmIn(BaseModel):
+    email: str = Field(max_length=320)
+    code: str = Field(min_length=6, max_length=6)
+    password: str = Field(min_length=12, max_length=256)
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"  # noqa: S105 - OAuth2 token type, not a secret

@@ -72,6 +72,14 @@ def shows(ident: ScopedIdentifier, text: str) -> bool:
         return _bounded(ident.value, text, before=r"[a-z0-9_-]", after=r"[a-z0-9_-]")
     if ident.kind == "image":
         return False  # only a reverse-image result can show an image; the agent tracks those
+    if ident.kind == "name":
+        # Every part, in any order: a page calls someone "Kirbac, Ugur" in a
+        # citation, "Ugur A. Kirbac" with an initial, or runs their name
+        # together in a domain. Requiring one contiguous string missed all
+        # three -- and it is the same rule ScopeGuard uses to decide whether a
+        # query is about the account holder, so the two agree by construction.
+        folded = fold(text)
+        return all(part in folded for part in fold(ident.value).split())
     return fold(ident.value) in fold(text)
 
 

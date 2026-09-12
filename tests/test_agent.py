@@ -5,6 +5,7 @@ from exposure_auditor.agent.orchestrator import AgentConfig, ScanAgent
 from exposure_auditor.agent.scope import ScopedIdentifier, ScopeGuard, ToolError
 from exposure_auditor.config import Settings
 from exposure_auditor.tools.brokers import BrokerRegistry
+from exposure_auditor.tools.search import SearchResult
 
 IDS = [
     ScopedIdentifier("e1", "email", "maija@example.com"),
@@ -116,3 +117,50 @@ def test_prod_refuses_console_code_delivery():
             _env_file=None, env="prod", database_url="postgresql+asyncpg://db/x",
             jwt_secret="s", field_encryption_key="k", blind_index_key="b",
         )
+
+
+async def _agent_that_stops_without_recording(llm, search):
+    config = AgentConfig(
+        llm=llm, model_id="m", effort="low", max_turns=6, max_searches=10,
+        search=search, reverse_image=None, brokers=BrokerRegistry.load(),
+    )
+    return ScanAgent(config, "exposure", [ScopedIdentifier("n1", "name", "Maija Meikalainen")])
+
+
+async def test_a_model_that_searches_then_summarizes_is_asked_to_record():
+    """Observed on a local model: twelve searches, no record_finding, and a
+    summary claiming findings it never filed. The prose is not the product."""
+    search = FakeSearch()
+    search.results = [SearchResult("https://spokeo.com/maija", "Maija Meikalainen", "Helsinki")]
+    llm = ScriptedLLM()
+    llm.script += [
+        reply("tool_use", tool_use("s1", "search_web", {"query": "Maija Meikalainen", "site": ""})),
+        reply("end_turn", text("I recorded one finding about the account holder.")),
+        reply("tool_use", tool_use("r1", "record_finding", {
+            "result_id": "r1", "category": "people_search", "matched_identifier_ids": ["n1"],
+            "conflicting_identifier_ids": [], "confidence": "low", "rationale": "name matches",
+        })),
+        reply("end_turn", text("Recorded.")),
+    ]
+
+    outcome = await (await _agent_that_stops_without_recording(llm, search)).run()
+
+    assert len(outcome.findings) == 1
+    assert "record_finding" in llm.calls[2]["messages"][-1]["content"]
+
+
+async def test_the_nudge_happens_once_and_a_real_nothing_is_accepted():
+    search = FakeSearch()
+    search.results = [SearchResult("https://example.net/someone", "Someone else", "")]
+    llm = ScriptedLLM()
+    llm.script += [
+        reply("tool_use", tool_use("s1", "search_web", {"query": "Maija Meikalainen", "site": ""})),
+        reply("end_turn", text("Nothing about them.")),
+        reply("end_turn", text("Nothing in these results was about the account holder.")),
+    ]
+
+    outcome = await (await _agent_that_stops_without_recording(llm, search)).run()
+
+    assert outcome.status == "completed"
+    assert outcome.findings == []
+    assert len(llm.calls) == 3  # asked once, not in a loop
