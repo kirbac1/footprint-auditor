@@ -28,6 +28,10 @@ def main(argv: list[str] | None = None) -> None:
     evals.add_argument("--report", default=None, help="write the JSON report here")
     evals.add_argument("--gate", action="store_true", help="exit non-zero if evals/thresholds.yaml isn't met")
     evals.add_argument("--language", default="en", choices=["en", "fi"], help="the language the agent answers in")
+    evals.add_argument(
+        "--repeat", type=int, default=1, metavar="N",
+        help="run the suite N times and report the mean with the range; a model's answers vary",
+    )
 
     args = parser.parse_args(argv)
     {"serve": _serve, "migrate": _migrate, "worker": _worker, "stats": _stats, "check": _check, "eval": _eval}[

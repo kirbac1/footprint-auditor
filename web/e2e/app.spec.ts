@@ -76,6 +76,49 @@ test("sign up, verify, scan, sort out a namesake and act on the plan", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("an earlier scan opens in the panel when you ask to see it", async ({ page }) => {
+  const email = `e2e-${Date.now()}@example.com`;
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill("correct-horse-battery");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await page.getByLabel("Value", { exact: true }).fill(email);
+  await page.getByRole("button", { name: "Add and send code" }).click();
+  await page.getByLabel(`Verification code for ${email}`).fill(await codeFor(email));
+  await page.getByRole("button", { name: "Verify", exact: true }).click();
+  await expect(page.getByText("Verified", { exact: true })).toBeVisible();
+
+  const details = page.locator("form", { hasText: "Add a detail" });
+  await details.getByLabel("Kind").selectOption("name");
+  await details.getByLabel("Value", { exact: true }).fill("Maija Meikäläinen");
+  await details.getByLabel(/This name is mine/).check();
+  await details.getByRole("button", { name: "Add", exact: true }).click();
+
+  // With a city in scope the demo pages resolve to "About you"; without one
+  // every name-only page waits for review instead.
+  const context = page.locator("form", { hasText: "Tell yourself apart" });
+  await context.getByLabel("Detail value").fill("Helsinki");
+  await context.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("Helsinki", { exact: true })).toBeVisible();
+
+  // Two scans, so the earlier-scans list appears at all.
+  await page.getByRole("tab", { name: "Footprint scan" }).click();
+  await page.getByRole("button", { name: "Scan my footprint" }).click();
+  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+  await page.getByRole("button", { name: "Scan my footprint" }).click();
+  await expect(page.getByRole("heading", { name: "Earlier scans" })).toBeVisible();
+
+  // The panel is above the list: clicking View has to bring the older scan
+  // into it, and say which row is showing, or the button looks dead.
+  const older = page.locator(".row").last();
+  await older.getByRole("button", { name: "View" }).click();
+  await expect(older.getByRole("button", { name: "Showing above" })).toBeVisible();
+  await expect(page.locator(".row.selected")).toHaveCount(1);
+});
+
 test("the interface switches to Finnish", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Vaihda kieli suomeksi" }).click();

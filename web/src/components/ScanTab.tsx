@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { api, errorText } from "../api";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Finding, Identifier, Meta, Scan, ScanKind, TraceEvent } from "../types";
@@ -17,6 +17,27 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
   const [selected, setSelected] = useState<Scan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const detailRef = useRef<HTMLDivElement>(null);
+  // The detail panel is above this list, so opening an older scan changes
+  // something off-screen. Scroll to it, or the button looks broken.
+  const scrollToDetail = useRef(false);
+
+  useEffect(() => {
+    if (!scrollToDetail.current) return;
+    scrollToDetail.current = false;
+    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  async function openScan(id: string) {
+    setError(null);
+    try {
+      const scan = await api.scan(id);
+      scrollToDetail.current = true;
+      setSelected(scan);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
 
   const hasVerified = identifiers.some((i) => i.status === "verified" && (i.kind === "email" || i.kind === "phone"));
   const proofRequired = meta?.username_proof_required ?? true;
@@ -24,6 +45,12 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
     i.kind === "username" ? i.status === "verified" || !proofRequired : i.kind === "name" || i.kind === "image",
   );
   const hasContext = identifiers.some((i) => ["city", "birth_year", "workplace"].includes(i.kind));
+  // The agent may only search for identifiers in scope. With an email and
+  // nothing else it can run, but brokers and people-search sites are indexed
+  // by name: the scan would come back empty and look like good news.
+  const searchableName = identifiers.some((i) =>
+    i.kind === "name" || i.kind === "phone" || (i.kind === "username" && (i.status === "verified" || !proofRequired)),
+  );
 
   const refreshList = useCallback(async () => {
     try {
@@ -93,7 +120,12 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
       <section className="card">
         <h2>{t("scan.title")}</h2>
         <p className="muted">{t("scan.intro")}</p>
-        {hasVerified && !hasContext && <p className="hint">{t("scan.contextTip")}</p>}
+        {hasVerified && !searchableName && (
+          <p className="callout warn">
+            <strong>{t("scan.emailOnlyTitle")}</strong> {t("scan.emailOnly")}
+          </p>
+        )}
+        {hasVerified && searchableName && !hasContext && <p className="hint">{t("scan.contextTip")}</p>}
         <div className="actions">
           <div className="action">
             <button className="primary" disabled={busy || exposureReason !== null} onClick={() => void start("exposure")}>
@@ -112,20 +144,28 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
         {error && <p className="error">{error}</p>}
       </section>
 
-      {selected && <ScanDetail scan={selected} onOpenPlan={onOpenPlan} onChanged={setSelected} />}
+      <div ref={detailRef}>
+        {selected && (
+          <ScanDetail scan={selected} identifiers={identifiers} onOpenPlan={onOpenPlan} onChanged={setSelected} />
+        )}
+      </div>
 
       {scans.length > 1 && (
         <section className="card">
           <h3>{t("scan.earlier")}</h3>
           <ul className="rows">
             {scans.map((s) => (
-              <li key={s.id} className="row">
+              <li key={s.id} className={`row${s.id === selected?.id ? " selected" : ""}`}>
                 <div className="row-main">
                   <span className="value">{t(`scanKind.${s.kind}` as MessageKey)}</span>
                   <span className="muted">{new Date(s.created_at).toLocaleString(lang === "fi" ? "fi-FI" : undefined)}</span>
                   <span className={`pill ${s.status}`}>{t(`scanStatus.${s.status}` as MessageKey)}</span>
-                  <button className="ghost small" onClick={() => void api.scan(s.id).then(setSelected)}>
-                    {t("scan.view")}
+                  <button
+                    className="ghost small"
+                    aria-current={s.id === selected?.id ? "true" : undefined}
+                    onClick={() => void openScan(s.id)}
+                  >
+                    {s.id === selected?.id ? t("scan.viewing") : t("scan.view")}
                   </button>
                 </div>
               </li>
@@ -137,13 +177,28 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
   );
 }
 
-function ScanDetail({ scan, onOpenPlan, onChanged }: { scan: Scan; onOpenPlan: () => void; onChanged: (s: Scan) => void }) {
+const CONFIDENCE_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+function ScanDetail({
+  scan,
+  identifiers,
+  onOpenPlan,
+  onChanged,
+}: {
+  scan: Scan;
+  identifiers: Identifier[];
+  onOpenPlan: () => void;
+  onChanged: (s: Scan) => void;
+}) {
   const { t } = useI18n();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const active = isActive(scan);
-  const aboutYou = scan.findings.filter((f) => f.match_status !== "unclear");
-  const review = scan.findings.filter((f) => f.match_status === "unclear");
+  // Strongest first: what a page shows about you decides what to deal with.
+  const byConfidence = (a: Finding, b: Finding) =>
+    (CONFIDENCE_ORDER[a.confidence] ?? 3) - (CONFIDENCE_ORDER[b.confidence] ?? 3);
+  const aboutYou = scan.findings.filter((f) => f.match_status !== "unclear").sort(byConfidence);
+  const review = scan.findings.filter((f) => f.match_status === "unclear").sort(byConfidence);
   const n = scan.namesakes_excluded;
 
   async function judge(finding: Finding, verdict: "me" | "not_me") {
@@ -187,7 +242,7 @@ function ScanDetail({ scan, onOpenPlan, onChanged }: { scan: Scan; onOpenPlan: (
           <h4 className="section-label">{t("scan.aboutYou")}</h4>
           <ul className="findings">
             {aboutYou.map((f) => (
-              <FindingItem key={f.id} finding={f}>
+              <FindingItem key={f.id} finding={f} identifiers={identifiers}>
                 <button className="ghost small" disabled={busy === f.id} onClick={() => void judge(f, "not_me")}>
                   {t("scan.notMe")}
                 </button>
@@ -203,7 +258,7 @@ function ScanDetail({ scan, onOpenPlan, onChanged }: { scan: Scan; onOpenPlan: (
           <p className="hint">{t("scan.reviewHint")}</p>
           <ul className="findings review">
             {review.map((f) => (
-              <FindingItem key={f.id} finding={f}>
+              <FindingItem key={f.id} finding={f} identifiers={identifiers}>
                 <button className="primary small" disabled={busy === f.id} onClick={() => void judge(f, "me")}>
                   {t("scan.thisIsMe")}
                 </button>
@@ -227,8 +282,21 @@ function ScanDetail({ scan, onOpenPlan, onChanged }: { scan: Scan; onOpenPlan: (
   );
 }
 
-function FindingItem({ finding: f, children }: { finding: Finding; children: ReactNode }) {
+function FindingItem({
+  finding: f,
+  identifiers,
+  children,
+}: {
+  finding: Finding;
+  identifiers: Identifier[];
+  children: ReactNode;
+}) {
   const { t } = useI18n();
+  // The code checked each of these against the page text before the finding
+  // was kept, so this is the evidence, not the model's say-so.
+  const matched = f.matched_identifier_ids
+    .map((id) => identifiers.find((i) => i.id === id))
+    .filter((i): i is Identifier => i !== undefined);
   return (
     <li className="finding">
       <div className="finding-head">
@@ -243,6 +311,16 @@ function FindingItem({ finding: f, children }: { finding: Finding; children: Rea
         {f.title || f.url}
       </a>
       <div className="url">{f.url}</div>
+      {matched.length > 0 && (
+        <p className="matched">
+          <span className="muted">{t("scan.matchedOn")}</span>{" "}
+          {matched.map((i) => (
+            <span key={i.id} className="chip">
+              {t(`kind.${i.kind}` as MessageKey)}
+            </span>
+          ))}
+        </p>
+      )}
       <p className="muted">{f.rationale}</p>
       <div className="finding-actions">{children}</div>
     </li>

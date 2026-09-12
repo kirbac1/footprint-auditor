@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     max_scan_cost_usd: float | None = 1.0
 
     hibp_api_key: SecretStr | None = None
+    # Reverse-image search for the impersonation check. TinEye matches copies
+    # of the photo, not faces; see tools/reverse_image.py for why that matters.
+    tineye_api_key: SecretStr | None = None
+    tineye_base_url: str = "https://api.tineye.com/rest"
     brave_api_key: SecretStr | None = None
     # Brave's free tier allows one query per second and the agent issues tool
     # calls in parallel, so searches are paced and rate-limit replies retried.

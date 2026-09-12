@@ -8,6 +8,24 @@
 # every remediation item so users can see how fresh the route is.
 
 brokers:
+  - id: deepsearch
+    name: DeepSearch
+    domains: [deepsearch.app]
+    jurisdictions: [US]
+    method: web_form
+    opt_out_url: https://deepsearch.app/remove-my-info
+    privacy_email: support@deepsearch.app
+    requires_id_verification: false
+    legal_bases: [ccpa]
+    notes: >-
+      AI people-search aggregator: builds a profile of a named person from
+      public sources, with citations. Its privacy policy names /remove-my-info
+      and support@deepsearch.app for suppression and opt-out of sale or
+      sharing, and promises only the response time "required by applicable
+      law". It does not claim GDPR compliance, so an Article 17 request may be
+      answered as a courtesy rather than an obligation.
+    last_verified: "2026-09-12"
+
   - id: spokeo
     name: Spokeo
     domains: [spokeo.com]

@@ -124,6 +124,9 @@ const en = {
   "scan.title": "Check your digital footprint",
   "scan.intro":
     "The scan searches the public web, data brokers and people-search sites for the details you've added. It can take a few minutes. You can leave this page; results are saved to your account.",
+  "scan.emailOnlyTitle": "Only your email address can be searched.",
+  "scan.emailOnly":
+    "Data brokers and people-search sites are indexed by name, so a scan with no name in scope usually finds nothing. Add your full name under Your details, and a phone number or username if you have one.",
   "scan.contextTip":
     "Tip: add a city, birth year or workplace under Your details. The scan uses them to leave out people who only share your name.",
   "scan.start": "Scan my footprint",
@@ -134,6 +137,7 @@ const en = {
   "scan.limits": "Up to {n} scans per day, one at a time.",
   "scan.earlier": "Earlier scans",
   "scan.view": "View",
+  "scan.viewing": "Showing above",
   "scan.scanning": "Scanning…",
   "scan.progress": "Searching. This page updates by itself.",
   "scan.leftOutOne":
@@ -149,6 +153,7 @@ const en = {
   "scan.notMe": "Not me",
   "scan.seePlan": "See what to do about these",
   "scan.confirmed": "Confirmed by you",
+  "scan.matchedOn": "The page shows:",
   "conf.high": "high confidence",
   "conf.medium": "medium confidence",
   "conf.low": "low confidence",
@@ -348,6 +353,9 @@ const fi: Record<MessageKey, string> = {
   "scan.title": "Tarkista digitaalinen jalanjälkesi",
   "scan.intro":
     "Skannaus etsii lisäämiäsi tietoja julkisesta verkosta, tietovälittäjiltä ja henkilöhakupalveluista. Se voi kestää muutaman minuutin. Voit poistua sivulta; tulokset tallentuvat tilillesi.",
+  "scan.emailOnlyTitle": "Vain sähköpostiosoitettasi voidaan hakea.",
+  "scan.emailOnly":
+    "Tietovälittäjät ja henkilöhakupalvelut on indeksoitu nimen mukaan, joten ilman nimeä skannaus ei yleensä löydä mitään. Lisää koko nimesi kohdassa Omat tiedot, ja puhelinnumero tai käyttäjätunnus jos sinulla on.",
   "scan.contextTip":
     "Vinkki: lisää Omat tiedot -kohtaan kaupunki, syntymävuosi tai työpaikka. Skannaus jättää niiden avulla pois ihmiset, joilla on vain sama nimi.",
   "scan.start": "Skannaa jalanjälkeni",
@@ -358,6 +366,7 @@ const fi: Record<MessageKey, string> = {
   "scan.limits": "Enintään {n} skannausta päivässä, yksi kerrallaan.",
   "scan.earlier": "Aiemmat skannaukset",
   "scan.view": "Näytä",
+  "scan.viewing": "Näkyy yllä",
   "scan.scanning": "Skannataan…",
   "scan.progress": "Haetaan. Sivu päivittyy itsestään.",
   "scan.leftOutOne":
@@ -373,6 +382,7 @@ const fi: Record<MessageKey, string> = {
   "scan.notMe": "En ole minä",
   "scan.seePlan": "Katso, mitä näille voi tehdä",
   "scan.confirmed": "Vahvistit tämän",
+  "scan.matchedOn": "Sivulla näkyy:",
   "conf.high": "varma",
   "conf.medium": "melko varma",
   "conf.low": "epävarma",

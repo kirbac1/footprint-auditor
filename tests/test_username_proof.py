@@ -28,7 +28,8 @@ def test_unproven_usernames_are_left_out_of_scans(ctx):
     assert ctx.client.post("/scan", headers=headers).status_code == 202
     assert "maija_m" not in ctx.llm.calls[0]["messages"][0]["content"]
     rejected = ctx.llm.calls[1]["messages"][-1]["content"][0]
-    assert rejected["is_error"] and "in-scope" in rejected["content"]
+    # Refused, and the unproven username isn't offered back as a usable term.
+    assert rejected["is_error"] and "maija_m" not in rejected["content"]
     # And it doesn't count as a profile for the impersonation check either.
     assert ctx.client.post("/impersonation-check", headers=headers).status_code == 409
 

@@ -7,11 +7,11 @@ holder.
 """
 
 import re
-import unicodedata
 from datetime import date
 from urllib.parse import urlsplit, urlunsplit
 
 from .scope import ScopedIdentifier
+from .text import fold, strip_marks
 
 # Any one of these on the page identifies the account holder on its own.
 STRONG_KINDS = frozenset({"email", "phone", "username", "image"})
@@ -31,20 +31,9 @@ _AIMED_AT_AGENT = re.compile(
 _AGE = re.compile(r"\bage[ds]?\s*:?\s*(\d{2})(s)?\b|\b(\d{2})\s*(?:years? old|y/o|vuotta)\b", re.IGNORECASE)
 
 
-def _strip_marks(text: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
-
-
-def fold(text: str) -> str:
-    """Case- and accent-insensitive, URL separators as spaces, so the name
-    'Meikäläinen' matches the slug 'maija-meikalainen'."""
-    t = re.sub(r"[-_./+%]+", " ", _strip_marks(text).casefold())
-    return " ".join(t.split())
-
-
 def _fold_exact(text: str) -> str:
     # No separator folding: "maija_m" must not match the words "Maija M...".
-    return _strip_marks(text).casefold()
+    return strip_marks(text.casefold())
 
 
 def _bounded(value: str, text: str, *, before: str, after: str) -> bool:

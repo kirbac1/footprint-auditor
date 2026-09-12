@@ -188,6 +188,25 @@ def summarize(results: list[CaseResult]) -> dict[str, float]:
     }
 
 
+# An invariant has to hold in every run, so it is judged by its worst run, not
+# by an average that a single clean run could rescue.
+INVARIANTS = ("errors", "namesake_leaks", "findings_outside_corpus")
+
+
+def aggregate(summaries: list[dict[str, float]]) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
+    """Mean across runs, with the range, so a difference between two numbers
+    can be told apart from the spread of one model answering the same question
+    twice. Invariants aggregate as their worst value instead of their mean."""
+    keys = summaries[0].keys()
+    mean: dict[str, float] = {}
+    spread: dict[str, tuple[float, float]] = {}
+    for k in keys:
+        values = [s[k] for s in summaries]
+        mean[k] = max(values) if k in INVARIANTS else round(statistics.fmean(values), 3)
+        spread[k] = (min(values), max(values))
+    return mean, spread
+
+
 def check(summary: dict[str, float], thresholds: dict, tier: str) -> list[str]:
     failures = []
     for section in ("guards", tier):
@@ -200,7 +219,13 @@ def check(summary: dict[str, float], thresholds: dict, tier: str) -> list[str]:
     return failures
 
 
-def _print(results: list[CaseResult], summary: dict[str, float], provider: str, model: str) -> None:
+def _print(
+    results: list[CaseResult],
+    summary: dict[str, float],
+    provider: str,
+    model: str,
+    spread: dict[str, tuple[float, float]] | None = None,
+) -> None:
     print(f"\nEval: provider={provider} model={model}\n")
     header = (f"{'case':34} {'status':10} {'recall':>6} {'l.prec':>6} {'leaks':>5} {'excl':>4} {'guard':>5} "
               f"{'cost $':>8} {'secs':>6}")
@@ -213,8 +238,15 @@ def _print(results: list[CaseResult], summary: dict[str, float], provider: str, 
         if r.error:
             print(f"    error: {r.error}")
     print()
+    if spread is None:
+        for k, v in summary.items():
+            print(f"  {k:28} {v}")
+        return
+    print("  (mean across runs, with the range; invariants show their worst run)")
     for k, v in summary.items():
-        print(f"  {k:28} {v}")
+        low, high = spread[k]
+        note = "" if low == high else f"   [{low} .. {high}]"
+        print(f"  {k:28} {v}{note}")
 
 
 def _eval_settings(provider: str) -> Settings:
@@ -248,15 +280,27 @@ def run_cli(args: Any) -> None:
         language = getattr(args, "language", "en")
         return [await run_case(c, llm, model, settings, brokers, language) for c in cases]
 
-    results = asyncio.run(run_all())
-    summary = summarize(results)
-    _print(results, summary, provider, model)
+    repeat = max(1, int(getattr(args, "repeat", 1) or 1))
+    runs: list[list[CaseResult]] = []
+    for i in range(repeat):
+        if repeat > 1:
+            print(f"\nrun {i + 1} of {repeat}")
+        runs.append(asyncio.run(run_all()))
+    summaries = [summarize(r) for r in runs]
+    results = runs[-1]
+    summary = summaries[-1]
+    spread: dict[str, tuple[float, float]] | None = None
+    if repeat > 1:
+        summary, spread = aggregate(summaries)
+    _print(results, summary, provider, model, spread)
 
     if args.report:
         report = {
             "provider": provider,
             "model": model,
+            "runs": repeat,
             "summary": summary,
+            "per_run": summaries,
             "cases": [asdict(r) | {"recall": r.recall, "likely_precision": r.likely_precision} for r in results],
         }
         Path(args.report).write_text(json.dumps(report, indent=2))

@@ -697,3 +697,24 @@ button.small {
 .steps li.warn .step-detail {
   color: var(--warn);
 }
+
+/* Which of your details a page actually showed. */
+.matched {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+}
+.chip {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  margin-right: 0.3rem;
+  font-size: 0.82rem;
+}
+
+/* The scan currently open in the panel above. */
+.row.selected {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}

@@ -20,7 +20,7 @@ from .ratelimit import RateLimiter
 from .services import Services
 from .tools.brokers import BrokerRegistry
 from .tools.hibp import HibpClient
-from .tools.reverse_image import ReverseImageProvider
+from .tools.reverse_image import ReverseImageProvider, TinEyeSearch
 from .tools.search import BraveSearch, PacedSearch, SearchProvider
 
 log = logging.getLogger(__name__)
@@ -86,6 +86,10 @@ async def service_context(
         )
     else:
         search_provider = None
+    if reverse_image is None and settings.tineye_api_key:
+        reverse_image = TinEyeSearch(
+            client, settings.tineye_api_key.get_secret_value(), settings.tineye_base_url
+        )
     if llm is not _DEFAULT:
         llm_client = llm
     elif settings.demo_scans:
