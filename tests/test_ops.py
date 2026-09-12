@@ -70,6 +70,45 @@ def _worker_mode(ctx):
     return services
 
 
+def test_the_trace_is_written_while_the_scan_is_still_running(ctx):
+    """The page follows a scan by polling the trace, so steps have to land as
+    they happen, not in one batch when the scan is over."""
+    headers = login(ctx.client)
+    add_verified_email(ctx, headers)
+    add_name(ctx, headers)
+    ctx.search.results = [SearchResult("https://www.spokeo.com/Maija/p1", "Maija Meikäläinen", "Helsinki")]
+    ctx.llm.script += [
+        reply("tool_use", tool_use("s1", "search_web", {"query": "Maija Meikäläinen", "site": ""})),
+        reply("end_turn", text("Done.")),
+    ]
+
+    seen: list[int] = []
+    original = ctx.search.search
+
+    async def counting_search(query, count=10):
+        # The first model call is finished by the time a tool runs: its row
+        # must already be readable from another connection.
+        rows = sqlite3.connect(ctx.db_path).execute("select count(*) from scan_events").fetchone()[0]
+        seen.append(rows)
+        return await original(query, count)
+
+    ctx.search.search = counting_search
+    r = ctx.client.post("/scan", headers=headers)
+    assert r.status_code == 202, r.text
+
+    assert seen == [1], "the first model call should be visible before the scan ends"
+    scan_id = r.json()["scan_id"]
+    trace = ctx.client.get(f"/scan/{scan_id}/trace", headers=headers).json()
+    assert [e["kind"] for e in trace] == ["model_call", "tool_call", "model_call"]
+    assert [e["seq"] for e in trace] == [0, 1, 2]
+
+    # Following a scan is one request per tick: two would spend the rate limit
+    # twice as fast as the page polls.
+    with_trace = ctx.client.get(f"/scan/{scan_id}?trace=true", headers=headers).json()
+    assert [e["seq"] for e in with_trace["trace"]] == [0, 1, 2]
+    assert ctx.client.get(f"/scan/{scan_id}", headers=headers).json()["trace"] is None
+
+
 def test_worker_mode_queues_and_the_worker_runs_it(ctx):
     services = _worker_mode(ctx)
     headers = login(ctx.client)

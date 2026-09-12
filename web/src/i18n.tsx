@@ -164,6 +164,10 @@ const en = {
   "trace.took": "Took",
   "trace.tokens": "Tokens in / out",
   "trace.model": "Model",
+  "trace.live": "What the scan is doing",
+  "trace.liveIntro":
+    "Each step as it finishes. Searches and judgements are the agent's; an outcome in orange is a guard refusing one.",
+  "trace.waiting": "Waiting for the first step…",
 
   "breach.title": "Is your email in a data breach?",
   "breach.intro": "Looks up your verified email addresses in Have I Been Pwned. Only addresses you've verified are sent.",
@@ -384,6 +388,10 @@ const fi: Record<MessageKey, string> = {
   "trace.took": "Kesto",
   "trace.tokens": "Tokenit sisään / ulos",
   "trace.model": "Malli",
+  "trace.live": "Mitä skannaus tekee",
+  "trace.liveIntro":
+    "Jokainen vaihe heti kun se valmistuu. Haut ja päätelmät ovat agentin; oranssi tulos tarkoittaa, että vartija esti sen.",
+  "trace.waiting": "Odotetaan ensimmäistä vaihetta…",
 
   "breach.title": "Onko sähköpostisi tietomurrossa?",
   "breach.intro": "Hakee vahvistetut sähköpostiosoitteesi Have I Been Pwned -palvelusta. Vain vahvistamasi osoitteet lähetetään.",

@@ -13,6 +13,9 @@ def make_engine(database_url: str) -> AsyncEngine:
         def _fk_on(dbapi_conn, _record):
             cur = dbapi_conn.cursor()
             cur.execute("PRAGMA foreign_keys=ON")
+            # A scan writes its trace step by step while the page polls to read
+            # it; in the default journal mode those block each other.
+            cur.execute("PRAGMA journal_mode=WAL")
             cur.close()
 
     return engine

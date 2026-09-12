@@ -260,7 +260,8 @@ recall and precision rather than leaving it to taste.
 uv run exposure-auditor check
 ```
 
-One cheap call per dependency: the database and its migration revision, a
+One cheap call per dependency: the database, its migration revision and
+whether the schema actually matches the models, a
 16-token model call, a probe search, the breach endpoints, and the budget this
 deployment will allow. It exits non-zero and names what's missing, so a wrong
 region or an unapproved model fails here instead of halfway through a scan.

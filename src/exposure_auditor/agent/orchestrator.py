@@ -123,6 +123,9 @@ class AgentConfig:
     # turns and searches bound the shape of a scan, not what it costs.
     cost_of: Callable[[int, int, int, int], float] | None = None
     max_cost_usd: float | None = None
+    # Called as each step finishes, so a scan in progress can be watched.
+    # Never let a failure here end a scan: it is reporting, not the work.
+    on_event: Callable[["TraceEvent"], Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -224,16 +227,25 @@ class ScanAgent:
             status, list(self._findings.values()), summary, self._searches, self._namesakes, list(self.events)
         )
 
+    async def _step(self, event: TraceEvent) -> None:
+        self.events.append(event)
+        if self._cfg.on_event is None:
+            return
+        try:
+            await self._cfg.on_event(event)
+        except Exception as exc:
+            log.warning("could not record trace step: %s", type(exc).__name__)
+
     async def _call_model(self, **kwargs: Any) -> Any:
         start = time.time_ns()
         try:
             response = await self._cfg.llm.messages.create(**kwargs)
         except Exception as exc:
-            self.events.append(
+            await self._step(
                 TraceEvent("model_call", self._cfg.model_id, "error", type(exc).__name__, start, time.time_ns())
             )
             raise
-        self.events.append(
+        await self._step(
             TraceEvent(
                 "model_call",
                 self._cfg.model_id,
@@ -299,7 +311,7 @@ class ScanAgent:
         except ToolError as exc:
             detail, status = exc.code, "rejected"
             result = {"type": "tool_result", "tool_use_id": block.id, "content": str(exc), "is_error": True}
-        self.events.append(TraceEvent("tool_call", str(block.name)[:64], status, detail, start, time.time_ns()))
+        await self._step(TraceEvent("tool_call", str(block.name)[:64], status, detail, start, time.time_ns()))
         return result
 
     async def _dispatch(self, name: str, inp: dict) -> tuple[str, str]:

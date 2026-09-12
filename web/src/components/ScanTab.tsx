@@ -51,14 +51,14 @@ export function ScanTab({ identifiers, meta, onOpenPlan }: Props) {
     let stopped = false;
     const timer = window.setInterval(async () => {
       try {
-        const scan = await api.scan(selectedId);
+        const scan = await api.scan(selectedId, true);
         if (stopped) return;
         setSelected(scan);
         if (!isActive(scan)) void refreshList();
       } catch (err) {
         setError(errorText(err));
       }
-    }, 2000);
+    }, 3000);
     return () => {
       stopped = true;
       window.clearInterval(timer);
@@ -221,6 +221,7 @@ function ScanDetail({ scan, onOpenPlan, onChanged }: { scan: Scan; onOpenPlan: (
           {t("scan.seePlan")}
         </button>
       )}
+      {active && <LiveTrace events={scan.trace ?? []} />}
       {!active && scan.model_calls > 0 && <TraceView scanId={scan.id} />}
     </section>
   );
@@ -260,6 +261,30 @@ function UsageLine({ scan }: { scan: Scan }) {
   if (scan.cost_usd != null) parts.push(`≈ $${scan.cost_usd.toFixed(3)}`);
   if (scan.duration_ms != null) parts.push(`${(scan.duration_ms / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} s`);
   return <p className="hint usage">{parts.join(" · ")}</p>;
+}
+
+function LiveTrace({ events }: { events: TraceEvent[] }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="trace live">
+      <h4 className="section-label">{t("trace.live")}</h4>
+      <p className="hint">{t("trace.liveIntro")}</p>
+      {events.length === 0 ? (
+        <p className="hint">{t("trace.waiting")}</p>
+      ) : (
+        <ol className="steps">
+          {events.map((e) => (
+            <li key={e.seq} className={e.status === "ok" ? "" : "warn"}>
+              <span className="step-name">{e.kind === "model_call" ? t("trace.model") : e.name}</span>
+              <span className="step-detail">{e.detail ?? e.status}</span>
+              <span className="step-time">{(e.duration_ms / 1000).toFixed(1)} s</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
 }
 
 function TraceView({ scanId }: { scanId: string }) {

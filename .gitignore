@@ -8,6 +8,9 @@ dist/
 # Secrets and local data: the dev DB holds encrypted PII, .env holds the keys to it.
 .env
 *.db
+# WAL mode keeps the data in sidecar files too.
+*.db-wal
+*.db-shm
 *.db-journal
 
 web/node_modules/

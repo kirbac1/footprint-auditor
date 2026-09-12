@@ -12,6 +12,7 @@ from conftest import reply, text, tool_use
 
 from exposure_auditor.agent.orchestrator import AgentConfig, ScanAgent
 from exposure_auditor.agent.scope import ScopedIdentifier
+from exposure_auditor.models import Base
 from exposure_auditor.preflight import format_checks, run_checks
 from exposure_auditor.tools.brokers import BrokerRegistry
 from exposure_auditor.tools.search import PacedSearch, RateLimited, SearchError, SearchResult
@@ -144,6 +145,30 @@ async def test_preflight_reports_what_a_real_scan_still_needs(settings):
 
     report = format_checks(checks)
     assert "Not ready" in report and "database" in report
+
+
+async def test_preflight_catches_a_schema_that_does_not_match_the_models(settings, tmp_path):
+    """A revision number is not proof: `migrate --stamp` writes one without
+    doing the work, which is how a live database ended up missing a table
+    while reporting itself current."""
+    import sqlalchemy as sa
+
+    url = f"sqlite:///{tmp_path}/drifted.db"
+    engine = sa.create_engine(url)
+    Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(sa.text("create table alembic_version (version_num varchar(32) not null)"))
+        conn.execute(sa.text("insert into alembic_version values ('0003')"))
+        conn.execute(sa.text("drop table finding_suppressions"))
+    engine.dispose()
+
+    drifted = settings.model_copy(update={"database_url": url.replace("sqlite://", "sqlite+aiosqlite://")})
+    checks = await run_checks(drifted, llm=_OkLLM(), search=_Recording(), hibp=_OkHibp())
+
+    database = next(c for c in checks if c.name == "database")
+    assert database.blocks_a_scan
+    assert "finding_suppressions" in database.detail
+    assert "0003" in database.detail
 
 
 async def test_preflight_blocks_a_scan_while_demo_mode_is_on(settings):

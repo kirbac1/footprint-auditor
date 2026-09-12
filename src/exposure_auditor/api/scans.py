@@ -97,7 +97,10 @@ async def list_scans(
 
 @router.get("/scan/{scan_id}", response_model=ScanOut)
 async def get_scan(
-    scan_id: str, user: User = Depends(rate_limited_user), session: AsyncSession = Depends(get_session)
+    scan_id: str,
+    trace: bool = False,
+    user: User = Depends(rate_limited_user),
+    session: AsyncSession = Depends(get_session),
 ) -> ScanOut:
     scan = await session.get(Scan, scan_id)
     if scan is None or scan.user_id != user.id:
@@ -107,6 +110,11 @@ async def get_scan(
     )
     out = ScanOut.model_validate(scan)
     out.findings = [FindingOut.model_validate(f) for f in findings.all()]
+    if trace:
+        # Watching a scan means polling; two endpoints would mean two requests
+        # a tick, which is what the rate limiter is there to prevent.
+        rows = await session.scalars(select(ScanEvent).where(ScanEvent.scan_id == scan.id).order_by(ScanEvent.seq))
+        out.trace = [ScanEventOut.model_validate(r) for r in rows.all()]
     return out
 
 

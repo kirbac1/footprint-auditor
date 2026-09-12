@@ -105,7 +105,9 @@ def load_cases(path: Path) -> list[Case]:
     return cases
 
 
-async def run_case(case: Case, llm: Any, model_id: str, settings: Settings, brokers: BrokerRegistry) -> CaseResult:
+async def run_case(
+    case: Case, llm: Any, model_id: str, settings: Settings, brokers: BrokerRegistry, language: str = "en"
+) -> CaseResult:
     search = FixtureSearch(case.pages)
     config = AgentConfig(
         llm=llm,
@@ -117,7 +119,7 @@ async def run_case(case: Case, llm: Any, model_id: str, settings: Settings, brok
         reverse_image=None,
         brokers=brokers,
     )
-    agent = ScanAgent(config, case.mode, case.identifiers)  # type: ignore[arg-type]
+    agent = ScanAgent(config, case.mode, case.identifiers, language=language)  # type: ignore[arg-type]
     error, findings, namesakes, status = None, [], 0, "error"
     loop = asyncio.get_running_loop()
     started = loop.time()
@@ -243,7 +245,8 @@ def run_cli(args: Any) -> None:
 
     async def run_all() -> list[CaseResult]:
         # Sequential: live runs are rate-limited and billed per token.
-        return [await run_case(c, llm, model, settings, brokers) for c in cases]
+        language = getattr(args, "language", "en")
+        return [await run_case(c, llm, model, settings, brokers, language) for c in cases]
 
     results = asyncio.run(run_all())
     summary = summarize(results)

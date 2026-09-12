@@ -662,3 +662,38 @@ button.small {
   margin: 12px 0;
   max-width: 320px;
 }
+
+/* Steps of a scan that is still running. */
+.trace.live {
+  margin-top: 1.25rem;
+}
+.steps {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+.steps li {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr auto;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--border);
+}
+.steps li:first-child {
+  border-top: none;
+}
+.steps .step-name {
+  font-weight: 500;
+}
+.steps .step-detail {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.steps .step-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.steps li.warn .step-detail {
+  color: var(--warn);
+}

@@ -11,11 +11,12 @@ import logging
 from dataclasses import dataclass
 
 import httpx2
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from .config import Settings
 from .db import make_engine
 from .llm import make_llm
+from .models import Base
 from .tools.hibp import HibpClient, HibpError
 from .tools.search import BraveSearch, SearchError
 
@@ -37,14 +38,36 @@ class Check:
         return self.required and not self.ok
 
 
+def _drift(inspector) -> list[str]:
+    """What the models describe that the database doesn't have.
+
+    The revision number alone doesn't prove the schema: `migrate --stamp`
+    writes it without doing the work, and a database built by create_all
+    before a table existed will claim to be current.
+    """
+    have = set(inspector.get_table_names())
+    missing = []
+    for name, table in Base.metadata.tables.items():
+        if name not in have:
+            missing.append(name)
+            continue
+        columns = {c["name"] for c in inspector.get_columns(name)}
+        missing += [f"{name}.{c.name}" for c in table.columns if c.name not in columns]
+    return sorted(missing)
+
+
 async def _database(settings: Settings) -> Check:
     engine = make_engine(settings.database_url)
     try:
         async with engine.connect() as conn:
             rev = (await conn.execute(text("select version_num from alembic_version"))).scalar_one_or_none()
+            missing = await conn.run_sync(lambda sync_conn: _drift(inspect(sync_conn)))
         if rev is None:
             return Check("database", False, "reachable, but no migrations applied: run `exposure-auditor migrate`")
-        return Check("database", True, f"reachable, at revision {rev}")
+        if missing:
+            listed = ", ".join(missing[:5]) + (f", and {len(missing) - 5} more" if len(missing) > 5 else "")
+            return Check("database", False, f"at revision {rev}, but the schema is missing {listed}")
+        return Check("database", True, f"reachable, at revision {rev}, schema matches the models")
     except Exception as exc:
         return Check("database", False, f"{type(exc).__name__}: {exc}")
     finally:

@@ -1,9 +1,11 @@
 """Scan lifecycle: who may be scanned, claiming a queued scan, running the
 agent, and recording what the run cost."""
 
+import itertools
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 
 import anthropic
 from sqlalchemy import select, update
@@ -98,10 +100,41 @@ def cost_usd(settings: Settings, input_tokens: int, output_tokens: int, cache_re
                  + cache_write * per_in * 1.25, 6)
 
 
+def scan_event(scan_id: str, seq: int, e: TraceEvent, started_ns: int) -> ScanEvent:
+    """One content-free row: names, outcome codes, timings and token counts."""
+    return ScanEvent(
+        scan_id=scan_id,
+        seq=seq,
+        kind=e.kind,
+        name=e.name,
+        status=e.status,
+        detail=e.detail[:64] if e.detail else None,
+        offset_ms=max(0, (e.start_ns - started_ns) // 1_000_000),
+        duration_ms=(e.end_ns - e.start_ns) // 1_000_000,
+        input_tokens=e.input_tokens,
+        output_tokens=e.output_tokens,
+        cache_read_tokens=e.cache_read_tokens,
+        cache_write_tokens=e.cache_write_tokens,
+    )
+
+
+def trace_writer(services: Services, scan_id: str, started_ns: int) -> Callable[[TraceEvent], Awaitable[None]]:
+    """Persists each step as it finishes, in its own short transaction, so a
+    scan in progress can be followed and a scan that dies keeps its trace."""
+    seq = itertools.count()
+
+    async def write(event: TraceEvent) -> None:
+        async with services.sessionmaker() as session:
+            session.add(scan_event(scan_id, next(seq), event, started_ns))
+            await session.commit()
+
+    return write
+
+
 def record_usage(
     scan: Scan, events: Sequence[TraceEvent], settings: Settings, started_ns: int, ended_ns: int
-) -> list[ScanEvent]:
-    """Totals onto the scan, plus one content-free ScanEvent row per step."""
+) -> None:
+    """Totals onto the scan. The per-step rows are written as they happen."""
     model = [e for e in events if e.kind == "model_call"]
     scan.model_calls = len(model)
     scan.tool_calls = len(events) - len(model)
@@ -113,23 +146,6 @@ def record_usage(
     scan.cost_usd = cost_usd(
         settings, scan.input_tokens, scan.output_tokens, scan.cache_read_tokens, scan.cache_write_tokens
     )
-    return [
-        ScanEvent(
-            scan_id=scan.id,
-            seq=i,
-            kind=e.kind,
-            name=e.name,
-            status=e.status,
-            detail=e.detail[:64] if e.detail else None,
-            offset_ms=max(0, (e.start_ns - started_ns) // 1_000_000),
-            duration_ms=(e.end_ns - e.start_ns) // 1_000_000,
-            input_tokens=e.input_tokens,
-            output_tokens=e.output_tokens,
-            cache_read_tokens=e.cache_read_tokens,
-            cache_write_tokens=e.cache_write_tokens,
-        )
-        for i, e in enumerate(sorted(events, key=lambda e: e.start_ns))
-    ]
 
 
 async def claim(session: AsyncSession, scan_id: str) -> bool:
@@ -154,7 +170,7 @@ async def run_scan(services: Services, scan_id: str) -> None:
             scoped, images = await load_scope(session, scan.user_id, scan.kind, settings.allow_unproven_usernames)
             suppressed = await load_suppressions(session, scan.user_id)
             agent = ScanAgent(
-                agent_config(services),
+                replace(agent_config(services), on_event=trace_writer(services, scan_id, started)),
                 scan.kind,
                 scoped,
                 images,
@@ -197,7 +213,7 @@ async def run_scan(services: Services, scan_id: str) -> None:
 
         ended = time.time_ns()
         events = agent.events if agent is not None else []
-        session.add_all(record_usage(scan, events, settings, started, ended))
+        record_usage(scan, events, settings, started, ended)
         scan.finished_at = utcnow()
         await session.commit()
         tracing.export_scan(

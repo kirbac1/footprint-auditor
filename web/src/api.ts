@@ -148,7 +148,8 @@ export const api = {
       `${kind === "exposure" ? "/scan" : "/impersonation-check"}?language=${language}`,
     ),
   scans: () => request<Scan[]>("GET", "/scans"),
-  scan: (id: string) => request<Scan>("GET", `/scan/${id}`),
+  scan: (id: string, withTrace = false) =>
+    request<Scan>("GET", `/scan/${id}${withTrace ? "?trace=true" : ""}`),
   scanTrace: (id: string) => request<TraceEvent[]>("GET", `/scan/${id}/trace`),
   confirmFinding: (id: string) => request<Finding>("POST", `/findings/${id}/confirm`),
   notMe: (id: string) => request<void>("POST", `/findings/${id}/not-me`),

@@ -78,6 +78,8 @@ class ScanOut(_Out):
     duration_ms: int | None = None
     cost_usd: float | None = None
     findings: list[FindingOut] = []
+    # Only with ?trace=true, so following a running scan is one request, not two.
+    trace: list["ScanEventOut"] | None = None
 
 
 class ScanEventOut(_Out):

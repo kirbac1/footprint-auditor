@@ -66,6 +66,7 @@ export interface Scan {
   duration_ms: number | null;
   cost_usd: number | null;
   findings: Finding[];
+  trace?: TraceEvent[] | null;
 }
 
 export interface TraceEvent {
