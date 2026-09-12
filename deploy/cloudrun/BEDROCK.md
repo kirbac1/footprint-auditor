@@ -34,8 +34,17 @@ argument or a repository secret)
 ```bash
 gcloud secrets create AWS_ACCESS_KEY_ID --replication-policy=automatic
 gcloud secrets create AWS_SECRET_ACCESS_KEY --replication-policy=automatic
-read -rs KEY   && printf '%s' "$KEY"   | gcloud secrets versions add AWS_ACCESS_KEY_ID --data-file=-
-read -rs SECRET && printf '%s' "$SECRET" | gcloud secrets versions add AWS_SECRET_ACCESS_KEY --data-file=-
+
+# Each of these prints a prompt, waits for you to paste, and echoes nothing.
+# A blank line with no prompt is what a silent read looks like -- hence the
+# printf, so it is obvious the shell is waiting for you rather than stuck.
+printf 'AWS access key ID: '; read -rs KEY; echo
+printf '%s' "$KEY" | gcloud secrets versions add AWS_ACCESS_KEY_ID --data-file=-
+
+printf 'AWS secret access key: '; read -rs SECRET; echo
+printf '%s' "$SECRET" | gcloud secrets versions add AWS_SECRET_ACCESS_KEY --data-file=-
+
+unset KEY SECRET
 
 project="$(gcloud config get-value project)"
 number="$(gcloud projects describe "$project" --format='value(projectNumber)')"
@@ -46,7 +55,9 @@ for s in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
 done
 ```
 
-`read -rs` keeps the key off your screen and out of shell history.
+`read -rs` keeps the key off your screen and out of shell history; `unset`
+drops it from the shell's memory afterwards. Nothing here passes the key as a
+command argument, where it would be visible to anyone running `ps`.
 
 ## 3. Turn it on
 
