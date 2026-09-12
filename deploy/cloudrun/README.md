@@ -41,6 +41,10 @@ Build, and deploys it in demo mode with at most one instance.
 - **One instance.** `--max-instances 1` keeps a single SQLite file coherent. It
   is also what keeps a surge inside the free tier.
 
+**Want the agent to be real?** [BEDROCK.md](BEDROCK.md) puts Claude Opus 5
+behind the demo while keeping the synthetic web: real tool calls and a real
+trace, no real person's data, cents per scan.
+
 **Not a demo any more?** Set `EA_DEMO_SCANS=false`, add `EA_BRAVE_API_KEY` and
 a model provider, point `EA_DATABASE_URL` at Cloud SQL, and switch
 `EA_VERIFICATION_DELIVERY` to something that actually sends mail. Then read
