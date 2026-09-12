@@ -17,18 +17,36 @@ inference in the EU; confirm the model is offered there, since availability
 still varies by region.
 
 **A user that can do exactly one thing.** IAM → Users → create
-`footprint-bedrock`, no console access, with this inline policy:
+`footprint-bedrock`, no console access, with this inline policy. Note the
+service prefix: the SDK talks to the Messages-API endpoint on Bedrock (the
+"Mantle" client), which authorizes on `bedrock-mantle:CreateInference` against
+a *project*, not `bedrock:InvokeModel` against a foundation model. Granting
+only the latter produces a 403 that names the missing action, which is how
+this was found.
 
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-    "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-5*"
-  }]
+  "Statement": [
+    {
+      "Sid": "MessagesApiOnBedrock",
+      "Effect": "Allow",
+      "Action": "bedrock-mantle:CreateInference",
+      "Resource": "arn:aws:bedrock-mantle:*:<your-account-id>:project/*"
+    },
+    {
+      "Sid": "LegacyInvokeModelPath",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-5*"
+    }
+  ]
 }
 ```
+
+The second statement is the older InvokeModel path, kept so the key still works
+if the client is ever switched back to it. Neither statement grants anything
+else: no S3, no instances, no billing.
 
 Then create an access key for it. That key can invoke one model family and
 nothing else: it cannot read S3, create instances or see your bill.
