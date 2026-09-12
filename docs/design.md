@@ -66,17 +66,29 @@ on your machine, so those details never leave it — the behaviour you would
 want from a tool whose subject is your own exposure. It also costs nothing per
 scan, which matters when a scan is 40 searches and 20 turns.
 
-**The measured comparison** (same seven cases, same guards):
+**The measured comparison** (same cases, same guards, same machine):
 
-| | scripted (CI) | qwen3:30b-a3b-instruct, local |
-|---|---|---|
-| recall | 0.923 | 0.846 mean, `[0.769 .. 1.0]` over 3 runs |
-| likely_precision | 1.0 | 1.0 |
-| namesake_leaks | 0 | 0 |
-| findings_outside_corpus | 0 | 0 |
-| out_of_scope_attempts | 0 | 1 |
-| invented_claims_blocked | 0 | 2–10 per run |
-| cost / p95 latency | $0 / — | $0 / ~116 s |
+| | scripted (CI) | qwen3:4b | qwen3:8b | qwen3:30b-a3b |
+|---|---|---|---|---|
+| recall | 0.923 | **0.0** | 0.154 `[0 .. 0.31]` | 0.846 `[0.77 .. 1.0]` |
+| likely_precision | 1.0 | 1.0\* | 1.0\* | 1.0 |
+| namesake_leaks | 0 | 0 | 0 | 0 |
+| findings_outside_corpus | 0 | 0 | 0 | 0 |
+| claims refused per run | 0 | 24 | **78** | 2–10 |
+| p95 latency | — | 28 s | 472 s | 116 s |
+
+\* precision over an empty set: the small models recorded almost nothing.
+
+**There is a cliff between 8B and 30B**, and the guards are what make it
+visible. A weak model here does not produce plausible-looking nonsense; it
+produces claims the page text does not support, 78 of them in a run, and every
+one is refused. The 8B is also four times slower than the 30B despite being a
+quarter the size, because it is dense: every parameter fires on every token,
+while the 30B is a mixture of experts with about 3B active.
+
+The practical consequence for hosting: an Ollama-only deployment needs the
+30B, which needs 32 GB and generates at a few tokens a second on CPU. Small
+models are not a cheaper version of this app. They cannot run it.
 
 Read the bottom half. The scripted model follows a script, so it never tests a
 guard. A real model driving the same tools tried an out-of-scope query and made
