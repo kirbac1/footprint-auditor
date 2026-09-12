@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="560" viewBox="0 0 680 560" role="img" aria-labelledby="title desc">
   <title id="title">How the personal data exposure auditor fits together, with its tech stack</title>
-  <desc id="desc">A React app in English and Finnish talks to a FastAPI service with JWT auth and an ownership gate. The API queues scans for a separate worker that runs the scan agent, the only AI component: one pluggable model, either Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or an OpenAI-compatible model such as Qwen3 running locally under Ollama. Next to it are the breach check using the Have I Been Pwned API and the rule-based action plan with GDPR and CCPA letters in English and Finnish. They store data in PostgreSQL 17, managed with Alembic and encrypted with Fernet and HMAC blind indexes, and every scan writes a content-free trace of tokens, cost and latency, exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate in AWS through Terraform.</desc>
+  <desc id="desc">A React app in English and Finnish talks to a FastAPI service with JWT auth and an ownership gate. The API queues scans for a separate worker that runs the scan agent, the only AI component: one pluggable model, gpt-oss-120b on Amazon Bedrock through its OpenAI-compatible endpoint (which the live demo runs), Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama. Next to it are the breach check using the Have I Been Pwned API and the rule-based action plan with GDPR and CCPA letters in English and Finnish. They store data in PostgreSQL 17, managed with Alembic and encrypted with Fernet and HMAC blind indexes, and every scan writes a content-free trace of tokens, cost and latency, exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate in AWS through Terraform.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 14px; font-weight: 500; text-anchor: middle; }
@@ -52,8 +52,8 @@
     <rect x="44" y="258" width="182" height="86" rx="8" stroke-width="1"/>
     <text class="th" x="135" y="278">Scan agent</text>
     <text class="ts" x="135" y="298">Runs in the scan worker</text>
-    <text class="tech" x="135" y="316">Claude Opus 5 · Qwen3</text>
-    <text class="tech" x="135" y="332">hosted API or Ollama</text>
+    <text class="tech" x="135" y="316">gpt-oss-120b · Opus 5</text>
+    <text class="tech" x="135" y="332">Bedrock · Qwen3 local</text>
   </g>
   <g class="teal">
     <rect x="249" y="258" width="182" height="86" rx="8" stroke-width="1"/>

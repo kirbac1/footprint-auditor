@@ -72,32 +72,36 @@ jobs:
           source: .
           region: ${{ vars.GCP_REGION || 'europe-north1' }}
           flags: --allow-unauthenticated --memory=1Gi --cpu=1 --min-instances=0 --max-instances=1
-          # The web stays synthetic; the model is real. Nobody's personal data
-          # is involved, and a scan costs cents instead of the price of a real
-          # one with forty live searches.
+          # The web stays synthetic; the model is real: gpt-oss-120b on Bedrock,
+          # through its OpenAI-compatible endpoint with a Bedrock API key. That
+          # is the path this account is entitled to -- the Messages API endpoint
+          # reported the Claude models as nonexistent, and the proprietary GPT
+          # models need AWS Sales. It also measured best in the eval: recall
+          # 0.969, no namesake leaks, 25 s at p95, about half a cent a case.
           env_vars: |
             EA_ENV=dev
             EA_DEMO_SCANS=true
             EA_VERIFICATION_DELIVERY=console
             EA_DATABASE_URL=sqlite+aiosqlite:////tmp/footprint.db
-            EA_LLM_PROVIDER=bedrock
-            EA_BEDROCK_REGION=${{ vars.EA_BEDROCK_REGION || 'eu-central-1' }}
-            EA_MODEL_ID=${{ vars.EA_MODEL_ID }}
-            EA_PRICE_INPUT_PER_MTOK=${{ vars.EA_PRICE_INPUT_PER_MTOK || '5.0' }}
-            EA_PRICE_OUTPUT_PER_MTOK=${{ vars.EA_PRICE_OUTPUT_PER_MTOK || '25.0' }}
-            EA_MAX_SCAN_COST_USD=${{ vars.EA_MAX_SCAN_COST_USD || '0.50' }}
-            EA_SCANS_PER_DAY=${{ vars.EA_SCANS_PER_DAY || '5' }}
-            EA_SCANS_PER_DAY_TOTAL=${{ vars.EA_SCANS_PER_DAY_TOTAL || '40' }}
+            EA_LLM_PROVIDER=openai
+            EA_OPENAI_BASE_URL=https://bedrock-runtime.${{ vars.EA_BEDROCK_REGION || 'eu-central-1' }}.amazonaws.com/openai/v1
+            EA_MODEL_ID=${{ vars.EA_MODEL_ID || 'openai.gpt-oss-120b-1:0' }}
+            EA_PRICE_INPUT_PER_MTOK=${{ vars.EA_PRICE_INPUT_PER_MTOK || '0.15' }}
+            EA_PRICE_OUTPUT_PER_MTOK=${{ vars.EA_PRICE_OUTPUT_PER_MTOK || '0.60' }}
+            EA_MAX_SCAN_COST_USD=${{ vars.EA_MAX_SCAN_COST_USD || '0.25' }}
+            EA_SCANS_PER_DAY=${{ vars.EA_SCANS_PER_DAY || '10' }}
+            EA_SCANS_PER_DAY_TOTAL=${{ vars.EA_SCANS_PER_DAY_TOTAL || '100' }}
             EA_DEMO_ACCOUNT_PUBLISHED=${{ vars.EA_DEMO_ACCOUNT_PUBLISHED || 'false' }}
             EA_REGISTRATION_OPEN=${{ vars.EA_REGISTRATION_OPEN || 'false' }}
           secrets: |
             EA_JWT_SECRET=EA_JWT_SECRET:latest
             EA_FIELD_ENCRYPTION_KEY=EA_FIELD_ENCRYPTION_KEY:latest
             EA_BLIND_INDEX_KEY=EA_BLIND_INDEX_KEY:latest
-            AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID:latest
-            AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY:latest
+            EA_OPENAI_API_KEY=EA_OPENAI_API_KEY:latest
 
       - name: Check the deployment answers
+        env:
+          EXPECT_REAL_MODEL: ${{ vars.MODEL_PROVIDER == 'bedrock' }}
         run: |
           url="${{ steps.deploy.outputs.url || steps.deploy_bedrock.outputs.url }}"
           echo "deployed to $url"
@@ -108,11 +112,13 @@ jobs:
           done
           cat meta.json
           python3 - <<'PY'
-          import json, sys
+          import json, os, sys
           meta = json.load(open("meta.json"))
           if not meta["demo_scans"]:
               sys.exit("refusing to call this a demo: EA_DEMO_SCANS is off")
           if not meta["scans_available"]:
               sys.exit("deployed, but scans are unavailable")
+          if os.environ.get("EXPECT_REAL_MODEL") == "true" and meta.get("scripted_model"):
+              sys.exit("expected a real model, but the demo fell back to the scripted one")
           print("demo is live, with the scripted model and synthetic results")
           PY

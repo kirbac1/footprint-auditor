@@ -14,7 +14,7 @@ a page is about you or a namesake, and what the legal letters say.
 
 ## How it works
 
-![Architecture: the React app (English and Finnish) talks to a FastAPI service with an ownership gate. It queues scans for a worker running the scan agent (Claude Opus 5 on Bedrock, Foundry or the Anthropic API, or a local model such as Qwen3 under Ollama), alongside the breach check and the action plan. Encrypted data goes to Postgres managed with Alembic, and each scan writes a content-free trace exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate through Terraform](docs/architecture.svg)
+![Architecture: the React app (English and Finnish) talks to a FastAPI service with an ownership gate. It queues scans for a worker running the scan agent (gpt-oss-120b on Amazon Bedrock, Claude Opus 5 on Bedrock, Foundry or the Anthropic API, or a local model such as Qwen3 under Ollama), alongside the breach check and the action plan. Encrypted data goes to Postgres managed with Alembic, and each scan writes a content-free trace exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate through Terraform](docs/architecture.svg)
 
 Only the purple box is AI. The model decides what to search for and judges which
 pages are about you. Everything else is ordinary code: who may be scanned,

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="560" viewBox="0 0 680 560" role="img" aria-labelledby="title desc">
   <title id="title">What is swappable and what is fixed</title>
-  <desc id="desc">The React app talks to the FastAPI service. Inside it, a fixed core holds the ownership gate, the scope guard, the claim check, the namesake rules and the rule-based plan: this is the part that does not change when anything else does. Around it, five ports each have more than one implementation: the model port speaks to Claude on Bedrock, Foundry or the Anthropic API, or to any OpenAI-compatible endpoint including Ollama on the user's own machine; web search speaks to Brave or to a fixture replay used by the evals; reverse image to TinEye or nothing; code delivery to SES and SNS, the console, or a test outbox; storage to PostgreSQL or SQLite. Swapping the model changes one environment variable and no guard.</desc>
+  <desc id="desc">The React app talks to the FastAPI service. Inside it, a fixed core holds the ownership gate, the scope guard, the claim check, the namesake rules and the rule-based plan: this is the part that does not change when anything else does. Around it, five ports each have more than one implementation: the model port speaks to Claude on Bedrock, Foundry or the Anthropic API, or to any OpenAI-compatible endpoint: gpt-oss-120b on Amazon Bedrock, which the live demo runs, or Ollama on the user's own machine; web search speaks to Brave or to a fixture replay used by the evals; reverse image to TinEye or nothing; code delivery to SES and SNS, the console, or a test outbox; storage to PostgreSQL or SQLite. Swapping the model changes one environment variable and no guard.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 13px; font-weight: 500; text-anchor: middle; }
@@ -51,7 +51,7 @@
     <text class="th" x="194" y="218">Model</text>
     <text class="tech" x="194" y="236">.messages.create()</text>
     <text class="ts" x="194" y="256">Claude: Bedrock · Foundry · API</text>
-    <text class="ts" x="194" y="274">OpenAI-compatible · Ollama</text>
+    <text class="ts" x="194" y="274">gpt-oss on Bedrock · Ollama</text>
   </g>
   <g class="gray">
     <rect x="296" y="198" width="140" height="92" rx="8" stroke-width="1"/>
@@ -85,7 +85,7 @@
   <rect class="frame" x="24" y="398" width="632" height="86" rx="12"/>
   <text class="frame-label" x="40" y="418">Swapping the model is one line, and no guard changes</text>
   <text class="tech" x="40" y="444" style="text-anchor:start">EA_LLM_PROVIDER=ollama    # free, local, nothing leaves the machine</text>
-  <text class="tech" x="40" y="464" style="text-anchor:start">EA_LLM_PROVIDER=bedrock   # Claude Opus 5 on AWS</text>
+  <text class="tech" x="40" y="464" style="text-anchor:start">EA_LLM_PROVIDER=openai    # gpt-oss-120b on Bedrock (the live demo)</text>
 
   <g class="teal"><rect x="180" y="512" width="12" height="12" rx="2" stroke-width="1"/></g>
   <text class="legend" x="200" y="518">Fixed core</text>

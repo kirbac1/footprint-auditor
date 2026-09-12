@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="540" viewBox="0 0 680 540" role="img" aria-labelledby="title desc">
   <title id="title">Inside the scan agent</title>
-  <desc id="desc">The model — Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or an OpenAI-compatible model such as Qwen3 running locally under Ollama — chooses what to search and judges each page. Its searches pass through ScopeGuard, which only allows queries containing the account holder's own details and rejects OR, pipe and AROUND operators, then go to the Brave Search API, or to a fixture replay during evals, whose results return to the model. Its findings pass through record_finding, which checks each claim against the page text and sends pages with text aimed at AI agents to review. Results are sorted into about you, needs your review, or namesake, which is counted but never saved. The user settles pages in review with This is me or Not me.</desc>
+  <desc id="desc">The model — gpt-oss-120b on Amazon Bedrock, Claude Opus 5 through Bedrock, Foundry or the Anthropic API, or Qwen3 running locally under Ollama — chooses what to search and judges each page. Its searches pass through ScopeGuard, which only allows queries containing the account holder's own details and rejects OR, pipe and AROUND operators, then go to the Brave Search API, or to a fixture replay during evals, whose results return to the model. Its findings pass through record_finding, which checks each claim against the page text and sends pages with text aimed at AI agents to review. Results are sorted into about you, needs your review, or namesake, which is counted but never saved. The user settles pages in review with This is me or Not me.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; dominant-baseline: central; }
     .th { font-size: 14px; font-weight: 500; text-anchor: middle; }
@@ -28,9 +28,9 @@
 
   <g class="purple">
     <rect x="200" y="24" width="280" height="72" rx="8" stroke-width="1"/>
-    <text class="th" x="340" y="44">Claude Opus 5 or Qwen3</text>
+    <text class="th" x="340" y="44">gpt-oss-120b, Opus 5 or Qwen3</text>
     <text class="ts" x="340" y="64">Chooses searches, judges pages</text>
-    <text class="tech" x="340" y="82">hosted API, or Ollama locally</text>
+    <text class="tech" x="340" y="82">Bedrock, or Ollama locally</text>
   </g>
   <path class="arr" d="M260 96 L260 120 L160 120 L160 148" marker-end="url(#arrow)"/>
   <path class="arr" d="M420 96 L420 120 L520 120 L520 148" marker-end="url(#arrow)"/>

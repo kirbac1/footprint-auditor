@@ -5,6 +5,25 @@ runs the real agent — real tool calls, real trace, real token counts — over
 synthetic pages, so no real person's data is ever involved and a scan costs
 cents rather than the price of one with forty live searches.
 
+## What actually works, and why
+
+Three routes were tried against a real account before this one:
+
+- **Claude through the Messages API endpoint** (`bedrock-mantle`): every model
+  id returned "does not exist", including ids and inference profiles that
+  `aws bedrock list-foundation-models` showed as active. The account is not
+  onboarded to that endpoint.
+- **GPT-5.6 Luna, Terra and GPT-6 Astra** on the OpenAI-compatible endpoint:
+  "not available for this account" — an entitlement that needs AWS Sales.
+- **gpt-oss-120b** on the same endpoint: works, and measured best of every
+  model this project has tried — recall 0.969 over nine cases including the
+  same-city namesake cases, no leaks, 25 s at p95, about half a cent a case at
+  $0.15 / $0.60 per million tokens.
+
+So the demo runs gpt-oss-120b through Bedrock's OpenAI-compatible endpoint,
+with a Bedrock API key, using the same adapter that serves Ollama locally. No
+new code was needed to add the provider; that is the point of the adapter.
+
 ## 1. On AWS (yours to do: I don't create credentials)
 
 **Model access.** Nothing to request: AWS retired the model-access page, and
@@ -53,45 +72,41 @@ nothing else: it cannot read S3, create instances or see your bill.
 
 ## 2. Store the key
 
+Generate a Bedrock API key (console → Bedrock → API keys), put it in `.env` as
+`EA_OPENAI_API_KEY` for local use, then:
+
 ```bash
-./deploy/cloudrun/set-bedrock-key.sh
+./deploy/cloudrun/set-bedrock-api-key.sh
 ```
 
-It prompts for both halves with the prompt visible and the typing hidden,
-trims stray whitespace from a paste, warns if the two look swapped, and checks
-the pair against AWS before storing anything — a key that AWS rejects never
-reaches Secret Manager. Neither half is ever a command-line argument, where
-`ps` would show it, and both are dropped from the shell afterwards. Re-running
-it adds a new version rather than failing on a conflict.
+It reads the key from `.env`, or asks with a hidden prompt; makes one real call
+to the model with it, with the header on stdin rather than the command line;
+and stores it in Secret Manager only if that call succeeds.
 
 ## 3. Turn it on
 
 ```bash
 gh variable set MODEL_PROVIDER --body bedrock
-gh variable set EA_BEDROCK_REGION --body eu-central-1
-# If invoking the bare model id fails with a validation error naming an
-# inference profile, set the id it asks for:
-#   aws bedrock list-inference-profiles
-# gh variable set EA_MODEL_ID --body eu.anthropic.claude-opus-5-...
 gh workflow run deploy-demo
 ```
 
-The workflow then deploys the Bedrock variant, which also closes registration
-and stops publishing the demo credentials: the people you send the link and
-the credentials to are the only ones who can spend the budget.
+The Bedrock variant closes registration and stops publishing the demo
+credentials, and the deploy fails if the running service reports the scripted
+model — which is what a missing secret would otherwise produce, silently.
 
 ## What it costs, and what stops it
 
-A demo scan is a handful of model calls over synthetic pages — cents, not the
-~$0.50 a real scan with live search costs. Three limits apply anyway, each
-settable as a repository variable:
+gpt-oss-120b is $0.15 per million input tokens and $0.60 per million output.
+A demo scan measured about half a cent; a real scan with forty live searches
+would be a few cents. Three limits apply anyway, each settable as a repository
+variable:
 
 | variable | default here | what it bounds |
 |---|---|---|
-| `EA_MAX_SCAN_COST_USD` | 0.50 | one scan, by estimated spend |
-| `EA_SCANS_PER_DAY` | 5 | one account |
-| `EA_SCANS_PER_DAY_TOTAL` | 40 | **the whole deployment** — the wallet |
+| `EA_MAX_SCAN_COST_USD` | 0.25 | one scan, by estimated spend |
+| `EA_SCANS_PER_DAY` | 10 | one account |
+| `EA_SCANS_PER_DAY_TOTAL` | 100 | **the whole deployment** — the wallet |
 
-Set an AWS budget alert as well. The caps are computed from
-`EA_PRICE_*_PER_MTOK`, so put the Bedrock prices in those variables or the
-ceiling is calibrated to the wrong number.
+At half a cent a scan, the deployment-wide cap bounds a bad day at about fifty
+cents. Set an AWS budget alert as well: the caps are estimates computed from
+`EA_PRICE_*_PER_MTOK`, and an estimate is not a bill.
