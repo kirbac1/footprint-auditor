@@ -13,6 +13,8 @@ import logging
 import os
 from typing import Any
 
+import httpx2
+
 from .config import Settings
 
 log = logging.getLogger(__name__)
@@ -41,6 +43,21 @@ def make_llm(settings: Settings) -> LLM | None:
     """
     provider = settings.llm_provider
     try:
+        if provider in ("ollama", "openai"):
+            from .openai_compat import OpenAICompatLLM
+
+            base = settings.ollama_host if provider == "ollama" else settings.openai_base_url
+            if not base:
+                log.warning("EA_OPENAI_BASE_URL is not set; scans are disabled")
+                return None
+            if provider == "openai" and not settings.model_id:
+                log.warning("EA_MODEL_ID is required with EA_LLM_PROVIDER=openai; scans are disabled")
+                return None
+            key = (settings.openai_api_key.get_secret_value() if settings.openai_api_key else None) or None
+            return OpenAICompatLLM(
+                httpx2.AsyncClient(timeout=settings.llm_timeout_seconds), base, key, provider
+            )
+
         if provider == "bedrock":
             import boto3
 

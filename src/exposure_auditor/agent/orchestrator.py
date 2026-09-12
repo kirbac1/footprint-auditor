@@ -119,6 +119,10 @@ class AgentConfig:
     search: SearchProvider | None
     reverse_image: ReverseImageProvider | None
     brokers: BrokerRegistry
+    # Estimated spend so far is the only budget the agent can be stopped on:
+    # turns and searches bound the shape of a scan, not what it costs.
+    cost_of: Callable[[int, int, int, int], float] | None = None
+    max_cost_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -149,7 +153,7 @@ class TraceEvent:
 
 @dataclass
 class AgentOutcome:
-    status: Literal["completed", "refused", "turn_limit"]
+    status: Literal["completed", "refused", "turn_limit", "cost_limit"]
     findings: list[RecordedFinding]
     summary: str
     searches_run: int
@@ -197,6 +201,7 @@ class ScanAgent:
         self._findings: dict[str, RecordedFinding] = {}
         self._searches = 0
         self._namesakes = 0
+        self._spend_usd = 0.0
         # Public so the caller can keep the trace of a scan that failed midway.
         self.events: list[TraceEvent] = []
 
@@ -239,6 +244,8 @@ class ScanAgent:
                 *_usage_of(response),
             )
         )
+        if self._cfg.cost_of is not None:
+            self._spend_usd += self._cfg.cost_of(*_usage_of(response))
         return response
 
     async def run(self) -> AgentOutcome:
@@ -248,6 +255,12 @@ class ScanAgent:
             {"role": "user", "content": task_message(self._identifiers, self._unavailable(), self._language)}
         ]
         for _ in range(self._cfg.max_turns):
+            if self._cfg.max_cost_usd is not None and self._spend_usd >= self._cfg.max_cost_usd:
+                return self._outcome(
+                    "cost_limit",
+                    f"The scan stopped at its cost ceiling of ${self._cfg.max_cost_usd:.2f}. "
+                    "Findings recorded before that point are kept.",
+                )
             response = await self._call_model(
                 model=self._cfg.model_id,
                 max_tokens=16000,

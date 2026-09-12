@@ -1,4 +1,4 @@
-"""exposure-auditor: serve, migrate, worker, stats (and eval, see evals/)."""
+"""exposure-auditor: serve, migrate, worker, check, stats (and eval, see evals/)."""
 
 import argparse
 import asyncio
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("worker", help="run queued scans (with EA_SCAN_EXECUTION=worker)")
     sub.add_parser("stats", help="latency and cost across finished scans")
+    sub.add_parser("check", help="verify credentials and config before a real scan")
 
     evals = sub.add_parser("eval", help="run the agent eval suite (see evals/README.md)")
     evals.add_argument("--provider", default="demo", help="demo (scripted), or bedrock, foundry, anthropic")
@@ -28,7 +29,9 @@ def main(argv: list[str] | None = None) -> None:
     evals.add_argument("--gate", action="store_true", help="exit non-zero if evals/thresholds.yaml isn't met")
 
     args = parser.parse_args(argv)
-    {"serve": _serve, "migrate": _migrate, "worker": _worker, "stats": _stats, "eval": _eval}[args.cmd](args)
+    {"serve": _serve, "migrate": _migrate, "worker": _worker, "stats": _stats, "check": _check, "eval": _eval}[
+        args.cmd
+    ](args)
 
 
 def _serve(args: argparse.Namespace) -> None:
@@ -64,6 +67,17 @@ def _worker(args: argparse.Namespace) -> None:
             await run_worker(services)
 
     asyncio.run(go())
+
+
+def _check(args: argparse.Namespace) -> None:
+    import sys
+
+    from .config import get_settings
+    from .preflight import format_checks, run_checks
+
+    checks = asyncio.run(run_checks(get_settings()))
+    print(format_checks(checks))
+    sys.exit(1 if any(c.blocks_a_scan for c in checks) else 0)
 
 
 def _percentile(values: list[float], pct: int) -> float:

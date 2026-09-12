@@ -1,16 +1,17 @@
 # Personal Data Exposure Auditor
 
 An app that helps a person find where **their own** data is exposed on the
-public internet, and turns that into a prioritized plan to reduce it. Claude
-does the discovery and triage. Everything that has to be right every time is
+public internet, and turns that into a prioritized plan to reduce it. One model
+does the discovery and triage -- Claude Opus 5, or a model running on your own
+machine. Everything that has to be right every time is
 plain, tested code: who may be scanned, which URLs count as findings, whether
 a page is about you or a namesake, and what the legal letters say.
 
 ## How it works
 
-![Architecture: the React app (English and Finnish) talks to a FastAPI service with an ownership gate. It queues scans for a worker running the scan agent (Claude Opus 5 on Bedrock, Foundry or the Anthropic API), alongside the breach check and the action plan. Encrypted data goes to Postgres managed with Alembic, and each scan writes a content-free trace exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate through Terraform](docs/architecture.svg)
+![Architecture: the React app (English and Finnish) talks to a FastAPI service with an ownership gate. It queues scans for a worker running the scan agent (Claude Opus 5 on Bedrock, Foundry or the Anthropic API, or a local model such as Qwen3 under Ollama), alongside the breach check and the action plan. Encrypted data goes to Postgres managed with Alembic, and each scan writes a content-free trace exportable over OpenTelemetry. It runs on Docker Compose locally and on ECS Fargate through Terraform](docs/architecture.svg)
 
-Only the purple box is AI. Claude decides what to search for and judges which
+Only the purple box is AI. The model decides what to search for and judges which
 pages are about you. Everything else is ordinary code: who may be scanned,
 breach lookups, the action plan and its letters, and storage.
 
@@ -18,17 +19,17 @@ breach lookups, the action plan and its letters, and storage.
 |---|---|
 | Frontend | React 19, TypeScript, Vite; English and Finnish; served by FastAPI under a strict CSP |
 | API | FastAPI, Python 3.12, Pydantic, JWT (PyJWT) with argon2 password hashing |
-| AI | Claude Opus 5 via the Anthropic Python SDK, on Amazon Bedrock, Microsoft Foundry or the Anthropic API; a hand-written tool-use loop |
+| AI | A hand-written tool-use loop over one pluggable model: Claude Opus 5 (Amazon Bedrock, Microsoft Foundry, Anthropic API) or any OpenAI-compatible endpoint, including a model running locally under Ollama |
 | Outside data | Brave Search API, Have I Been Pwned API v3, GitHub and Bluesky public profile APIs |
 | Storage | PostgreSQL 17 (SQLite in tests), SQLAlchemy 2 async, Alembic migrations, Fernet field encryption with HMAC blind indexes |
 | Jobs | A separate scan worker claiming queued scans from the database |
 | Observability | Per-scan trace with tokens, cost and latency; optional OpenTelemetry export (GenAI conventions), content-free |
-| Quality | pytest (88 tests), an agent eval suite with a CI gate, Playwright end-to-end tests, GitHub Actions |
+| Quality | pytest (95 tests), an agent eval suite with a CI gate, Playwright end-to-end tests, GitHub Actions |
 | Runtime | Docker Compose locally; AWS (ECS Fargate, RDS, ALB) with Terraform |
 
-![The scan agent loop: Claude chooses searches and judges pages; searches pass through ScopeGuard to Brave (or a fixture replay in evals), findings pass through record_finding, which checks claims against the page and sends text aimed at AI to review, and results are sorted into about you, needs your review (This is me / Not me), or namesake](docs/scan-agent.svg)
+![The scan agent loop: the model chooses searches and judges pages; searches pass through ScopeGuard to Brave (or a fixture replay in evals), findings pass through record_finding, which checks claims against the page and sends text aimed at AI to review, and results are sorted into about you, needs your review (This is me / Not me), or namesake](docs/scan-agent.svg)
 
-The scan stage is an agent. Claude picks a search, reads the results, decides
+The scan stage is an agent. The model picks a search, reads the results, decides
 what to try next, judges each page, and stops when it has covered your
 details. Its actions are deliberately narrow: it can search and record, and
 the code in teal decides whether each action is allowed. It never sends
@@ -132,6 +133,16 @@ addressed to the agent happened to repeat the person's city, so the claim
 check accepted it as a likely match. Now any page that talks to AI agents
 stays in review. [`evals/README.md`](evals/README.md) has the details.
 
+The same seven cases run against any model. A local `qwen3:30b-a3b` scores the
+same recall and precision as the scripted model while trying an out-of-scope
+query once and making six unsupported claims -- all refused by the guards, none
+of which depend on which model is driving. The table is in
+[`evals/README.md`](evals/README.md).
+
+[`docs/guardrails.md`](docs/guardrails.md) is the whole set as one contract:
+every rule, the line that enforces it, the test or eval case that proves it,
+and the ones that are still only structural.
+
 ## Data handling
 
 - PII columns (identifier values, account email, finding URLs and titles,
@@ -214,30 +225,86 @@ GDPR letter. For hot reload, run `uv run exposure-auditor` and
 Set `EA_DONATE_URL` to a PayPal donate or `paypal.me` link to show a
 "Donate via PayPal" button. It's a plain link, so the strict CSP stays as it is.
 
-## Run it for real
+## Run it for real: scanning yourself
 
-Real scans need a model and a search API:
+Everything below runs on your own machine, against your own data.
 
-| Provider | Settings |
-|---|---|
-| Anthropic API | `EA_LLM_PROVIDER=anthropic`, `EA_ANTHROPIC_API_KEY` |
-| Amazon Bedrock | `EA_LLM_PROVIDER=bedrock`, AWS credentials with Claude Opus 5 access, `EA_BEDROCK_REGION` |
-| Microsoft Foundry | `EA_LLM_PROVIDER=foundry`, `EA_FOUNDRY_RESOURCE`, `EA_FOUNDRY_API_KEY` |
+**1. Get the keys.** A model provider is required, so is search; the breach key
+is optional and only affects email lookups.
 
-Plus `EA_BRAVE_API_KEY` for web search and, for email breach lookups, a paid
-`EA_HIBP_API_KEY`. Remove `EA_DEMO_SCANS`, then run the eval against the real
-model before scanning yourself; it needs only the model credentials:
+| What | Where | Cost |
+|---|---|---|
+| A model — one of: | | |
+| **Local, under Ollama** | `EA_LLM_PROVIDER=ollama`; `ollama pull qwen3:30b-a3b-instruct-2507-q4_K_M` | free; needs ~20 GB of RAM |
+| Anthropic API | `EA_LLM_PROVIDER=anthropic`, `EA_ANTHROPIC_API_KEY` | pay per token |
+| Amazon Bedrock | `EA_LLM_PROVIDER=bedrock`, AWS credentials with Claude Opus 5 access, `EA_BEDROCK_REGION` | pay per token |
+| Microsoft Foundry | `EA_LLM_PROVIDER=foundry`, `EA_FOUNDRY_RESOURCE`, `EA_FOUNDRY_API_KEY` | pay per token |
+| Any OpenAI-compatible API (Mistral, OpenAI, Groq, …) | `EA_LLM_PROVIDER=openai`, `EA_OPENAI_BASE_URL`, `EA_OPENAI_API_KEY`, `EA_MODEL_ID` | pay per token |
+| Web search | `EA_BRAVE_API_KEY` | free tier: 1 query/second, 2,000/month |
+| Email breach lookups | `EA_HIBP_API_KEY` | paid; password checks work without it |
+
+Put them in `.env` and remove `EA_DEMO_SCANS`, which otherwise shows you
+synthetic findings.
+
+**On running the model locally.** A scan sends your name, email, phone and city
+to whichever model judges the pages. With `EA_LLM_PROVIDER=ollama` that model is
+on your machine, so those details never leave it — which is the behaviour you
+would want from a tool whose whole subject is your exposure. It costs nothing
+per scan, so you can run it as often as you like. It is also a smaller model
+than Claude Opus 5, and the eval is there to tell you what that costs you in
+recall and precision rather than leaving it to taste.
+
+**2. Check before you spend anything.**
 
 ```bash
-uv run exposure-auditor eval --provider anthropic --gate
+uv run exposure-auditor check
 ```
 
-Set `EA_PRICE_INPUT_PER_MTOK` / `EA_PRICE_OUTPUT_PER_MTOK` to what your
-provider bills, and the cost per scan will be right.
+One cheap call per dependency: the database and its migration revision, a
+16-token model call, a probe search, the breach endpoints, and the budget this
+deployment will allow. It exits non-zero and names what's missing, so a wrong
+region or an unapproved model fails here instead of halfway through a scan.
+
+**3. Run the eval against the real model, before pointing it at yourself.**
+
+```bash
+uv run exposure-auditor eval --provider ollama --gate     # free, local
+uv run exposure-auditor eval --provider bedrock --gate    # or a hosted model
+```
+
+Seven cases against saved pages, so it costs model tokens and no search quota.
+Run it for each model you are considering: same cases, same guards, and the
+differences are measured rather than argued about.
+This is the first time the guards meet a real model: expect to tune the prompt,
+and set the `live:` thresholds in `evals/thresholds.yaml` from what you measure.
+
+**4. Then scan yourself.** Start the service, register, verify your email (the
+code is printed to the log in dev), add what you want searched, and run a scan.
+`uv run exposure-auditor stats` shows what each one cost.
+
+### What it costs, and what stops it
+
+A scan is bounded three ways, all in [config.py](src/exposure_auditor/config.py):
+
+- `EA_AGENT_MAX_TURNS` (24) and `EA_AGENT_MAX_SEARCHES` (40) bound its shape.
+- `EA_MAX_SCAN_COST_USD` (1.00) bounds its spend. The agent stops and
+  summarizes what it has when the estimated running total passes the ceiling,
+  so a loop that goes wrong costs a known amount. Set it to `null` to remove it.
+- `EA_SCANS_PER_DAY` (5), one at a time.
+
+Set `EA_PRICE_INPUT_PER_MTOK` / `EA_PRICE_OUTPUT_PER_MTOK` to what your provider
+actually bills; Bedrock and Foundry price separately from the Anthropic API, and
+the ceiling and the cost figures both use these.
+
+Searches are paced to Brave's free tier — one per second, rate-limit replies
+retried — because the agent issues its tool calls in parallel and an unpaced
+scan spends its search budget on refusals. On a paid tier, lower
+`EA_SEARCH_MIN_INTERVAL_MS`.
 
 ## Tests
 
 ```bash
+uv run exposure-auditor check                  # credentials and config, before a real scan
 uv run pytest                                  # API, agent, guards, migrations, i18n
 uv run exposure-auditor eval --gate            # agent eval (scripted)
 cd web && npm run build && npx playwright test # end-to-end, starts its own API

@@ -21,7 +21,7 @@ from .services import Services
 from .tools.brokers import BrokerRegistry
 from .tools.hibp import HibpClient
 from .tools.reverse_image import ReverseImageProvider
-from .tools.search import BraveSearch, SearchProvider
+from .tools.search import BraveSearch, PacedSearch, SearchProvider
 
 log = logging.getLogger(__name__)
 _DEFAULT: Any = object()
@@ -79,7 +79,11 @@ async def service_context(
     elif settings.demo_scans:
         search_provider = DemoSearch()
     elif settings.brave_api_key:
-        search_provider = BraveSearch(client, settings.brave_api_key.get_secret_value())
+        search_provider = PacedSearch(
+            BraveSearch(client, settings.brave_api_key.get_secret_value()),
+            settings.search_min_interval_ms / 1000,
+            settings.search_max_retries,
+        )
     else:
         search_provider = None
     if llm is not _DEFAULT:

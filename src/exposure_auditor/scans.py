@@ -17,6 +17,7 @@ from .config import Settings
 from .crypto import FieldCipher
 from .identifiers import VERIFIABLE_KINDS
 from .models import Finding, FindingSuppression, Identifier, Scan, ScanEvent, utcnow
+from .openai_compat import ModelUnavailable
 from .services import Services
 
 log = logging.getLogger(__name__)
@@ -81,12 +82,16 @@ def agent_config(services: Services) -> AgentConfig:
         search=services.search,
         reverse_image=services.reverse_image,
         brokers=services.brokers,
+        cost_of=lambda i, o, cr, cw: cost_usd(s, i, o, cr, cw),
+        max_cost_usd=s.max_scan_cost_usd,
     )
 
 
 def cost_usd(settings: Settings, input_tokens: int, output_tokens: int, cache_read: int, cache_write: int) -> float:
     """Estimated spend. Cache reads bill at 0.1x the input price and 5-minute
-    cache writes at 1.25x."""
+    cache writes at 1.25x. A model running locally costs nothing per token."""
+    if settings.llm_provider == "ollama":
+        return 0.0
     per_in = settings.price_input_per_mtok / 1_000_000
     per_out = settings.price_output_per_mtok / 1_000_000
     return round(input_tokens * per_in + output_tokens * per_out + cache_read * per_in * 0.1
@@ -159,7 +164,7 @@ async def run_scan(services: Services, scan_id: str) -> None:
             outcome = await agent.run()
         except ScopeUnavailable as exc:
             scan.status, scan.error = "failed", str(exc)
-        except anthropic.APIError as exc:
+        except (anthropic.APIError, ModelUnavailable) as exc:
             # Expired credentials, no model access in this region, network:
             # an operator problem, not something the user can retry away.
             log.error("scan %s: model call failed: %s", scan_id, type(exc).__name__)

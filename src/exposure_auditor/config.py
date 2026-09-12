@@ -13,6 +13,12 @@ _DEFAULT_MODELS = {
     "bedrock": "anthropic.claude-opus-5",
     "foundry": "claude-opus-5",
     "anthropic": "claude-opus-5",
+    # A mixture-of-experts model small enough to run on a laptop: the scan
+    # never leaves the machine, which matters for a tool that handles the
+    # user's own identifiers. Set EA_MODEL_ID to try another local model.
+    "ollama": "qwen3:30b-a3b-instruct-2507-q4_K_M",
+    # No sensible default: whatever the endpoint in EA_OPENAI_BASE_URL serves.
+    "openai": "",
 }
 
 
@@ -38,12 +44,20 @@ class Settings(BaseSettings):
 
     # All three providers serve Claude through the Anthropic SDK; the agent
     # code is identical, only the client differs (see llm.py).
-    llm_provider: Literal["bedrock", "foundry", "anthropic"] = "bedrock"
+    llm_provider: Literal["bedrock", "foundry", "anthropic", "ollama", "openai"] = "bedrock"
     model_id: str | None = None  # defaults per provider, see resolved_model_id
     bedrock_region: str = "eu-central-1"
     foundry_resource: str | None = None
     foundry_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
+    # ollama: a model running on this machine, nothing leaves it.
+    ollama_host: str = "http://127.0.0.1:11434/v1"
+    # openai: any endpoint speaking the OpenAI chat-completions API, e.g.
+    # https://api.mistral.ai/v1 or https://api.openai.com/v1.
+    openai_base_url: str | None = None
+    openai_api_key: SecretStr | None = None
+    # A local model is slower per turn than a hosted one; a scan is many turns.
+    llm_timeout_seconds: float = 300.0
     agent_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     agent_max_turns: int = 24
     agent_max_searches: int = 40
@@ -52,9 +66,17 @@ class Settings(BaseSettings):
     # separately, so set these to what you are actually billed.
     price_input_per_mtok: float = 5.0
     price_output_per_mtok: float = 25.0
+    # A ceiling on the estimated spend of a single scan. The agent stops and
+    # summarizes what it has when the running total passes this, so a loop that
+    # goes wrong costs a known amount. None removes the ceiling.
+    max_scan_cost_usd: float | None = 1.0
 
     hibp_api_key: SecretStr | None = None
     brave_api_key: SecretStr | None = None
+    # Brave's free tier allows one query per second and the agent issues tool
+    # calls in parallel, so searches are paced and rate-limit replies retried.
+    search_min_interval_ms: int = 1100
+    search_max_retries: int = 2
 
     # console and outbox are for local work and tests only; prod refuses both.
     verification_delivery: Literal["console", "outbox", "aws"] = "console"

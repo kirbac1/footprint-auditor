@@ -11,6 +11,7 @@ change means the agent changed, not the internet.
 
 ```bash
 uv run exposure-auditor eval                         # scripted model, no credentials, free
+uv run exposure-auditor eval --provider ollama       # a local model; free, needs Ollama running
 uv run exposure-auditor eval --provider anthropic    # a real model; needs EA_ANTHROPIC_API_KEY
 uv run exposure-auditor eval --provider bedrock      # needs AWS credentials with Bedrock access
 uv run exposure-auditor eval --gate --report out.json
@@ -57,6 +58,38 @@ someone's details to get past a text check.
 The fix is in `agent/matching.py`: a page whose text addresses AI agents is
 never marked "likely". It waits for the person's review, and the trace
 records it as `suspicious_text`. The case now passes, and a unit test pins it.
+
+## Measured: what changes when the model does
+
+Same seven cases, same guards, two different models. `qwen3:30b-a3b-instruct`
+runs locally under Ollama on a 32 GB laptop; `demo` is the scripted model that
+runs in CI.
+
+| | scripted (CI) | qwen3:30b-a3b-instruct (local) |
+|---|---|---|
+| `recall` | 0.923 | 0.923 |
+| `likely_precision` | 1.0 | 1.0 |
+| `namesake_leaks` | 0 | 0 |
+| `findings_outside_corpus` | 0 | 0 |
+| `out_of_scope_attempts` | 0 | **1** |
+| `invented_claims_blocked` | 0 | **6** |
+| mean model calls per scan | 3.0 | 5.57 |
+| p95 latency | — | 39 s |
+| cost per scan | $0 | $0 |
+
+Read the bottom half of that table, not the top. The scripted model follows a
+script, so it never tests a guard. A real model driving the same tools tried an
+out-of-scope query once and made six claims the page text didn't support — and
+every one was refused, which is why the top half looks the same. The
+invariants (`namesake_leaks`, `findings_outside_corpus`) held for both, as they
+must: they are enforced in code, not requested in a prompt.
+
+The equal recall is a coincidence worth spelling out. The two models miss
+*different* pages: the scripted one misses a page in `phone-national-format`,
+the local one misses a second subject page in `common-name-with-context` after
+13 searches and 20 turns. A local model of this size costs nothing per scan and
+keeps the person's identifiers on their own machine, and it pays for that with
+roughly twice the turns and 39 s at p95 against a replay that returns instantly.
 
 ## Running it live in CI
 
