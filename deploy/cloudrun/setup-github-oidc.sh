@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup so GitHub Actions can deploy to Cloud Run without a key.
 #
-#   ./deploy/cloudrun/setup-github-oidc.sh <gcp-project-id> <github-owner/repo>
+#   ./deploy/cloudrun/setup-github-oidc.sh <gcp-project-id> <github-owner/repo> [region]
 #
 # Prints the two values to paste into the repository's secrets.
 set -euo pipefail
@@ -42,6 +42,13 @@ for name in EA_JWT_SECRET EA_FIELD_ENCRYPTION_KEY EA_BLIND_INDEX_KEY; do
     --member "serviceAccount:$number-compute@developer.gserviceaccount.com" \
     --role roles/secretmanager.secretAccessor >/dev/null
 done
+
+# A source deploy pushes into this repository. Creating it here means the
+# deployer needs only writer, not the right to create repositories.
+region="${3:-europe-north1}"
+gcloud artifacts repositories describe cloud-run-source-deploy --location "$region" >/dev/null 2>&1 ||
+  gcloud artifacts repositories create cloud-run-source-deploy --repository-format=docker \
+    --location "$region" --description "Images built by Cloud Run source deploys" >/dev/null
 
 gcloud iam workload-identity-pools describe "$pool" --location global >/dev/null 2>&1 ||
   gcloud iam workload-identity-pools create "$pool" --location global --display-name "GitHub" >/dev/null
